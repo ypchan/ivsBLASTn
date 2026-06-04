@@ -2,6 +2,7 @@ __pycache__/
 .agents/
 .codex/
 *.py[cod]
+*.baiduyun.uploading.cfg
 *.egg-info/
 .pytest_cache/
 .mypy_cache/
