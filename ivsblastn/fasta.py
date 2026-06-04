@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import gzip
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, TextIO, Tuple
+from typing import Dict, Iterable, Iterator, List, Optional, TextIO, Tuple
 
 def open_text_auto(path: Path) -> TextIO:
     """Open plain text or gzip-compressed text."""
@@ -31,6 +31,37 @@ def write_fasta_record(handle: TextIO, seq_id: str, seq: str) -> None:
     """Write one FASTA record safely."""
 
     print(f">{seq_id}", file=handle)
+    for part in wrap_fasta(seq):
+        print(part, file=handle)
+
+
+def iter_fasta_records(path: Path) -> Iterator[Tuple[str, str, str]]:
+    """Yield FASTA records as (record_id, description, sequence)."""
+
+    current_header: Optional[str] = None
+    current_seq: List[str] = []
+    with open_text_auto(path) as handle:
+        for raw in handle:
+            line = raw.strip()
+            if not line:
+                continue
+            if line.startswith(">"):
+                if current_header is not None:
+                    record_id = current_header.split()[0]
+                    yield record_id, current_header, "".join(current_seq).upper()
+                current_header = line[1:]
+                current_seq = []
+            else:
+                current_seq.append(line)
+        if current_header is not None:
+            record_id = current_header.split()[0]
+            yield record_id, current_header, "".join(current_seq).upper()
+
+
+def write_fasta_record_with_description(handle: TextIO, description: str, seq: str) -> None:
+    """Write one FASTA record preserving a full description line."""
+
+    print(f">{description}", file=handle)
     for part in wrap_fasta(seq):
         print(part, file=handle)
 

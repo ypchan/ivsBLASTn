@@ -2,21 +2,31 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures as futures
+import shlex
+import sys
 from pathlib import Path
-from typing import List
+from typing import List, Optional, Sequence
 
 from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn, TimeElapsedColumn, TimeRemainingColumn
 from rich_argparse import RichHelpFormatter
 
+from . import __version__
 from .algorithm import analyze_query, confidence_rank
 from .blast import parse_blast, run_query_blastn
 from .fasta import read_fasta
 from .logging import CONSOLE, LOG, setup_logging
+from .merge import merge_chunk_outputs
 from .models import QueryResult
 from .outputs import print_summary, write_bed_outputs, write_fasta_outputs, write_report, write_summary, write_supporting_hsps
 from .paths import setup_output_paths
 from .reference import clean_reference_introns, preprocess_reference
+from .slurm import render_slurm_array_script, submit_sbatch, write_slurm_array_script
+from .split import split_fasta
 from .taxonomy import parse_taxonomy
+
+
+SUBCOMMANDS = {"run", "split", "submit-slurm", "merge"}
+
 
 def positive_int(value: str) -> int:
     ivalue = int(value)
@@ -39,20 +49,16 @@ def probability_percent(value: str) -> float:
     return fvalue
 
 
-def build_parser() -> argparse.ArgumentParser:
-    """Create argument parser."""
+def add_common_logging_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--verbose", action="store_true", help="Print debug logs. Default: disabled.")
 
-    parser = argparse.ArgumentParser(
-        prog="ivsBLASTn",
-        description="ivsBLASTn -- detect intervening sequences by blastn search.",
-        formatter_class=RichHelpFormatter,
-    )
 
+def add_run_args(parser: argparse.ArgumentParser) -> None:
     required = parser.add_argument_group("Required inputs")
     required.add_argument("--query", required=True, type=Path, help="Query 16S FASTA/FASTA.gz file. No default.")
-    required.add_argument("--blast", default=None, type=Path, help="Existing BLASTN outfmt 6 table. Default: not used; provide exactly one of --blast, --db, or --ref-fasta.")
-    required.add_argument("--db", default=None, type=Path, help="Existing BLAST database prefix. Default: not used; provide exactly one of --blast, --db, or --ref-fasta.")
-    required.add_argument("--ref-fasta", default=None, type=Path, help="SILVA-style reference FASTA/FASTA.gz with taxonomy in headers. Default: not used; provide exactly one of --blast, --db, or --ref-fasta.")
+    required.add_argument("--blast", default=None, type=Path, help="Existing BLASTN outfmt 6 table. Provide exactly one of --blast, --db, or --ref-fasta.")
+    required.add_argument("--db", default=None, type=Path, help="Existing BLAST database prefix. Provide exactly one of --blast, --db, or --ref-fasta.")
+    required.add_argument("--ref-fasta", default=None, type=Path, help="SILVA-style reference FASTA/FASTA.gz with taxonomy in headers. Provide exactly one of --blast, --db, or --ref-fasta.")
     required.add_argument("--outdir", required=True, type=Path, help="Output directory. No default.")
 
     algorithm = parser.add_argument_group("Algorithm")
@@ -74,7 +80,7 @@ def build_parser() -> argparse.ArgumentParser:
     filters.add_argument("--blast-task", default="blastn", choices=["blastn", "megablast", "dc-megablast", "blastn-short"], help="BLASTN task. Default: blastn.")
     filters.add_argument("--blast-evalue", default="1e-20", help="BLASTN e-value. Default: 1e-20.")
 
-    intron = parser.add_argument_group("Candidate intron geometry")
+    intron = parser.add_argument_group("Candidate IVS geometry")
     intron.add_argument("--min-intron-len", default=25, type=nonnegative_int, help="Minimum query gap size. Default: 25 bp.")
     intron.add_argument("--max-intron-len", default=2000, type=positive_int, help="Maximum query gap size. Default: 2000 bp.")
     intron.add_argument("--max-ref-gap", default=30, type=nonnegative_int, help="Maximum absolute reference gap/overlap. Default: 30 bp.")
@@ -94,15 +100,77 @@ def build_parser() -> argparse.ArgumentParser:
     confidence.add_argument("--min-output-confidence", default="LOW", choices=["LOW", "MEDIUM", "HIGH"], help="Minimum confidence removed in intron-free FASTA and written to intron FASTA/BED outputs. Default: LOW.")
     confidence.add_argument("--gzip-fasta-output", action="store_true", help="Write intron-free and intron FASTA outputs as .fa.gz. Default: disabled.")
 
-    runtime = parser.add_argument_group("Runtime and logging")
+    runtime = parser.add_argument_group("Runtime")
     runtime.add_argument("--threads", default=4, type=positive_int, help="Worker threads. BLASTN also uses this value. Default: 4.")
-    runtime.add_argument("--verbose", action="store_true", help="Print debug logs. Default: disabled.")
+    add_common_logging_args(parser)
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """Create argument parser."""
+
+    parser = argparse.ArgumentParser(
+        prog="ivsBLASTn",
+        description="Detect 16S/SSU intervening sequences by BLASTN HSP geometry.",
+        formatter_class=RichHelpFormatter,
+    )
+    parser.add_argument("--version", action="version", version=f"ivsBLASTn {__version__}")
+    subparsers = parser.add_subparsers(dest="command", metavar="COMMAND")
+
+    run_parser = subparsers.add_parser("run", help="Run IVS detection on one query FASTA or one chunk.", formatter_class=RichHelpFormatter)
+    add_run_args(run_parser)
+    run_parser.set_defaults(func=run_command)
+
+    split_parser = subparsers.add_parser("split", help="Split a large query FASTA into chunk FASTA files.", formatter_class=RichHelpFormatter)
+    split_parser.add_argument("--query", required=True, type=Path, help="Input query FASTA/FASTA.gz.")
+    split_parser.add_argument("--chunks-dir", required=True, type=Path, help="Output directory for chunk FASTA files.")
+    split_parser.add_argument("--chunk-size", default=5000, type=positive_int, help="Records per chunk. Default: 5000.")
+    split_parser.add_argument("--chunk-prefix", default="query", help="Chunk filename prefix. Default: query.")
+    add_common_logging_args(split_parser)
+    split_parser.set_defaults(func=split_command)
+
+    submit_parser = subparsers.add_parser("submit-slurm", help="Generate and optionally submit a Slurm array over query chunks.", formatter_class=RichHelpFormatter)
+    submit_parser.add_argument("--chunks-dir", required=True, type=Path, help="Directory created by `ivsBLASTn split`.")
+    submit_parser.add_argument("--db", required=True, type=Path, help="BLAST database prefix shared by all chunks.")
+    submit_parser.add_argument("--taxonomy", default=None, type=Path, help="Optional taxonomy TSV shared by all chunks.")
+    submit_parser.add_argument("--outdir", required=True, type=Path, help="Batch run output directory.")
+    submit_parser.add_argument("--threads", default=8, type=positive_int, help="Threads passed to each ivsBLASTn run. Default: 8.")
+    submit_parser.add_argument("--top-subjects", default=100, type=positive_int, help="Subjects requested and analyzed per query. Default: 100.")
+    submit_parser.add_argument("--blast-max-hsps", default=5, type=positive_int, help="HSPs requested per query-subject pair. Default: 5.")
+    submit_parser.add_argument("--cpus-per-task", default=8, type=positive_int, help="Slurm CPUs per array task. Default: 8.")
+    submit_parser.add_argument("--mem", default="16G", help="Slurm memory per task. Default: 16G.")
+    submit_parser.add_argument("--time", default="12:00:00", help="Slurm time limit. Default: 12:00:00.")
+    submit_parser.add_argument("--partition", default=None, help="Optional Slurm partition.")
+    submit_parser.add_argument("--array-concurrency", default=None, type=positive_int, help="Optional Slurm array concurrency limit.")
+    submit_parser.add_argument("--extra-run-args", default="", help="Extra arguments appended to each `ivsBLASTn run` command.")
+    submit_parser.add_argument("--submit", action="store_true", help="Submit with sbatch after writing the script. Default: write only.")
+    add_common_logging_args(submit_parser)
+    submit_parser.set_defaults(func=submit_slurm_command)
+
+    merge_parser = subparsers.add_parser("merge", help="Merge per-chunk ivsBLASTn outputs.", formatter_class=RichHelpFormatter)
+    merge_parser.add_argument("--chunk-results-dir", required=True, type=Path, help="Directory containing per-chunk output directories, usually OUTDIR/chunks.")
+    merge_parser.add_argument("--outdir", required=True, type=Path, help="Final merged output directory.")
+    merge_parser.add_argument("--label", default="merged", help="Output file prefix. Default: merged.")
+    add_common_logging_args(merge_parser)
+    merge_parser.set_defaults(func=merge_command)
 
     return parser
 
 
-def validate_args(args: argparse.Namespace) -> None:
-    """Validate input arguments."""
+def normalize_legacy_argv(argv: Sequence[str]) -> List[str]:
+    """Map old `ivsBLASTn --query ...` usage to `ivsBLASTn run --query ...`."""
+
+    args = list(argv)
+    if not args:
+        return args
+    if args[0] in SUBCOMMANDS or args[0] in {"-h", "--help", "--version"}:
+        return args
+    if args[0].startswith("-"):
+        return ["run", *args]
+    return args
+
+
+def validate_run_args(args: argparse.Namespace) -> None:
+    """Validate run command arguments."""
 
     if not args.query.exists():
         raise FileNotFoundError(f"Query FASTA not found: {args.query}")
@@ -119,13 +187,10 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--min-intron-len must be <= --max-intron-len")
 
 
-def main() -> int:
-    """CLI entry point."""
+def run_pipeline(args: argparse.Namespace) -> int:
+    """Run the original single-query-FASTA ivsBLASTn workflow."""
 
-    parser = build_parser()
-    args = parser.parse_args()
-    setup_logging(args.verbose)
-    validate_args(args)
+    validate_run_args(args)
     setup_output_paths(args)
 
     progress = Progress(
@@ -168,8 +233,8 @@ def main() -> int:
         blast_by_query = parse_blast(blast_path, args.min_pident, args.min_hsp_len)
         progress.update(task, completed=1, total=1)
 
-        query_ids = sorted(seqs.keys())
-        task = progress.add_task("Detecting introns", total=len(query_ids))
+        query_ids = list(seqs.keys())
+        task = progress.add_task("Detecting IVSs", total=len(query_ids))
 
         def worker(query_id: str) -> QueryResult:
             return analyze_query(query_id, blast_by_query.get(query_id, {}), len(seqs.get(query_id, "")), taxonomy, args)
@@ -181,7 +246,7 @@ def main() -> int:
                 progress.advance(task)
         else:
             with futures.ThreadPoolExecutor(max_workers=args.threads) as executor:
-                for result in executor.map(worker, query_ids, chunksize=128):
+                for result in executor.map(worker, query_ids, chunksize=256):
                     results.append(result)
                     progress.advance(task)
 
@@ -202,6 +267,74 @@ def main() -> int:
         progress.advance(task)
 
     return 0
+
+
+def run_command(args: argparse.Namespace) -> int:
+    return run_pipeline(args)
+
+
+def split_command(args: argparse.Namespace) -> int:
+    if not args.query.exists():
+        raise FileNotFoundError(f"Query FASTA not found: {args.query}")
+    split_fasta(args.query, args.chunks_dir, args.chunk_size, args.chunk_prefix)
+    return 0
+
+
+def submit_slurm_command(args: argparse.Namespace) -> int:
+    manifest = args.chunks_dir / "chunks.tsv"
+    if not manifest.exists():
+        raise FileNotFoundError(f"Chunk manifest not found: {manifest}")
+    if not args.taxonomy and "--taxonomy" not in args.extra_run_args:
+        LOG.warning("No taxonomy TSV supplied; MEDIUM/HIGH confidence will be harder to reach")
+    script = render_slurm_array_script(
+        chunks_dir=args.chunks_dir,
+        outdir=args.outdir,
+        db=args.db,
+        taxonomy=args.taxonomy,
+        threads=args.threads,
+        top_subjects=args.top_subjects,
+        blast_max_hsps=args.blast_max_hsps,
+        cpus_per_task=args.cpus_per_task,
+        mem=args.mem,
+        time=args.time,
+        partition=args.partition,
+        array_concurrency=args.array_concurrency,
+        extra_run_args=args.extra_run_args,
+    )
+    script_path = write_slurm_array_script(script, args.outdir)
+    if args.submit:
+        job_id = submit_sbatch(script_path)
+        (args.outdir / "slurm" / "job_id.txt").write_text(f"{job_id}\n", encoding="utf-8")
+    else:
+        CONSOLE.print(f"Slurm script written: {script_path}")
+        CONSOLE.print("Review it, then submit with:")
+        CONSOLE.print(f"  sbatch {shlex.quote(str(script_path))}")
+    return 0
+
+
+def merge_command(args: argparse.Namespace) -> int:
+    merge_chunk_outputs(args.chunk_results_dir, args.outdir, args.label)
+    return 0
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    """CLI entry point."""
+
+    parser = build_parser()
+    parsed_argv = normalize_legacy_argv(sys.argv[1:] if argv is None else argv)
+    args = parser.parse_args(parsed_argv)
+    if not hasattr(args, "func"):
+        parser.print_help()
+        return 2
+    setup_logging(getattr(args, "verbose", False))
+    try:
+        return args.func(args)
+    except Exception:
+        if getattr(args, "verbose", False):
+            LOG.exception("ivsBLASTn failed")
+        else:
+            LOG.error("ivsBLASTn failed: %s", sys.exc_info()[1])
+        return 1
 
 
 if __name__ == "__main__":

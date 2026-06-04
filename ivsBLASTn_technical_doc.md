@@ -71,7 +71,7 @@ qseqid sseqid pident length qstart qend sstart send evalue bitscore
 Example:
 
 ```bash
-ivsBLASTn \
+ivsBLASTn run \
   --query query_16s.fa \
   --blast query_vs_ref.blastn.tsv \
   --taxonomy reference.tax.tsv \
@@ -85,7 +85,7 @@ Use this mode when a nucleotide BLAST database already exists. The script runs `
 Example:
 
 ```bash
-ivsBLASTn \
+ivsBLASTn run \
   --query query_16s.fa \
   --db ref_db_prefix \
   --taxonomy reference.tax.tsv \
@@ -116,7 +116,7 @@ In this mode the script:
 Example:
 
 ```bash
-ivsBLASTn \
+ivsBLASTn run \
   --query query_16s.fa \
   --ref-fasta SILVA_NR99.fa.gz \
   --outdir intron_detection \
@@ -611,7 +611,7 @@ The Markdown report includes:
 Use this when the reference is expected to be mostly intron-free:
 
 ```bash
-ivsBLASTn \
+ivsBLASTn run \
   --query query_16s.fa \
   --ref-fasta SILVA_NR99.fa.gz \
   --outdir intron_detection \
@@ -623,7 +623,7 @@ ivsBLASTn \
 If intron-bearing references are expected to be rare, for example below 1%, use reference self-cleaning and retain more near-best subjects:
 
 ```bash
-ivsBLASTn \
+ivsBLASTn run \
   --query query_16s.fa \
   --ref-fasta SILVA_NR99.fa.gz \
   --outdir intron_detection_clean_ref \
@@ -648,7 +648,38 @@ reference/reference_self_clean.report.md
 reference/reference_self_clean.supporting_hsps.tsv
 ```
 
-### 10.3 Conservative Geometry
+### 10.3 Large Query Sets With Slurm
+
+For million-sequence query FASTA files, split query records and run one chunk per Slurm array task:
+
+```bash
+ivsBLASTn split \
+  --query all_16s.fa \
+  --chunks-dir batch01/chunks \
+  --chunk-size 5000
+
+ivsBLASTn submit-slurm \
+  --chunks-dir batch01/chunks \
+  --db reference_db_prefix \
+  --taxonomy reference.tax.tsv \
+  --outdir batch01 \
+  --threads 8 \
+  --cpus-per-task 8 \
+  --mem 16G \
+  --time 12:00:00 \
+  --array-concurrency 40
+
+sbatch batch01/slurm/ivsBLASTn_array.sbatch
+
+ivsBLASTn merge \
+  --chunk-results-dir batch01/chunks \
+  --outdir batch01/final \
+  --label all_16s
+```
+
+Query splitting is algorithmically safe because each query is classified independently from its own BLAST HSPs and the shared reference taxonomy. Direct merging is supported for uncompressed FASTA outputs; avoid `--gzip-fasta-output` in chunk runs if you want `ivsBLASTn merge` to concatenate FASTA files.
+
+### 10.4 Conservative Geometry
 
 Use this when false positives are more costly than false negatives:
 
@@ -666,7 +697,7 @@ Effect:
 - Requires tighter subject continuity.
 - Requires more independent subject support for `MEDIUM`.
 
-### 10.4 Sensitive Exploration
+### 10.5 Sensitive Exploration
 
 Use this when references are distant or sequence divergence is high:
 

@@ -18,22 +18,6 @@ def make_blast_db(fasta: Path, db_prefix: Path, makeblastdb_bin: str) -> None:
     subprocess.run(cmd, check=True)
 
 
-def parse_taxonomy(path: Optional[Path]) -> Dict[str, str]:
-    """Read subject taxonomy mapping."""
-
-    if path is None:
-        return {}
-    taxonomy: Dict[str, str] = {}
-    with path.open("rt", encoding="utf-8") as handle:
-        reader = csv.reader(handle, delimiter=chr(9))
-        for row in reader:
-            if not row or row[0].startswith("#") or len(row) < 2:
-                continue
-            taxonomy[row[0]] = row[1]
-    LOG.info("Parsed taxonomy mappings: %s subjects", len(taxonomy))
-    return taxonomy
-
-
 def run_blastn_to_file(query: Path, db: Path, out_file: Path, args: argparse.Namespace, max_targets: int, max_hsps: int, label: str) -> Path:
     """Run BLASTN and return output table path."""
 
