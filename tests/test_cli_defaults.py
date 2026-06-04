@@ -55,7 +55,7 @@ class CliDefaultTests(unittest.TestCase):
             ]
         )
 
-        self.assertEqual(args.min_pident, 80.0)
+        self.assertEqual(args.min_pident, 70.0)
         self.assertEqual(args.min_hsp_len, 100)
         self.assertEqual(args.max_ref_gap, 15)
         self.assertEqual(args.breakpoint_window, 20)

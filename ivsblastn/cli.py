@@ -28,7 +28,7 @@ from .taxonomy import parse_taxonomy
 SUBCOMMANDS = {"run", "init-reference", "split", "submit-slurm", "merge"}
 BLAST_DB_EXTENSIONS = (".nhr", ".nin", ".nsq", ".nal", ".ndb", ".njs", ".nog", ".nos", ".not", ".ntf", ".nto")
 DEFAULT_REF_CLEAN_MIN_CONFIDENCE = "MEDIUM"
-DEFAULT_MIN_PIDENT = 80.0
+DEFAULT_MIN_PIDENT = 70.0
 DEFAULT_MIN_HSP_LEN = 100
 DEFAULT_TOP_SUBJECTS = 100
 DEFAULT_REF_SELF_BLAST_MAX_TARGET_SEQS = 100

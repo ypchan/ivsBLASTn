@@ -237,7 +237,7 @@ For 16S/SSU IVS screening, these are usually the most important:
 ```bash
 --top-subjects 100
 --blast-max-hsps 5
---min-pident 80
+--min-pident 70
 --min-hsp-len 100
 --min-intron-len 25
 --max-intron-len 2000
@@ -262,7 +262,7 @@ So the maximum reported HSP count per query is bounded by:
 
 For IVS detection in 16S rRNA genes, IVSs are expected to be sparse, so the default `--blast-max-hsps 5` keeps BLAST output smaller than the earlier conservative value of 20.
 
-The default thresholds are publication-oriented rather than discovery-only. LOW-confidence candidates remain visible in `*.summary.tsv` and `*.supporting_hsps.tsv` for manual review, but sequence-changing outputs (`*.intron_free.fa`, `*.introns.fa`, and BED files) use `--min-output-confidence MEDIUM` by default. Reference self-cleaning also uses `--ref-clean-min-confidence MEDIUM` by default to avoid removing reference sequence from a single-subject signal. For exploratory screening, lower these explicitly, for example `--min-output-confidence LOW`.
+The default thresholds are publication-oriented rather than discovery-only. The permissive `--min-pident 70` keeps distant 16S/SSU exon support available, while the geometry filters and MEDIUM/HIGH support requirements control sequence-changing calls. LOW-confidence candidates remain visible in `*.summary.tsv` and `*.supporting_hsps.tsv` for manual review, but sequence-changing outputs (`*.intron_free.fa`, `*.introns.fa`, and BED files) use `--min-output-confidence MEDIUM` by default. Reference self-cleaning also uses `--ref-clean-min-confidence MEDIUM` by default to avoid removing reference sequence from a single-subject signal. For stricter analyses, raise `--min-pident` explicitly, for example to 80 or 85.
 
 For manuscripts, report the exact command line plus the confidence tier used for sequence editing. A conservative wording is that MEDIUM/HIGH IVSs were used for downstream corrected sequences, while LOW calls were retained as candidate signals requiring manual inspection.
 
