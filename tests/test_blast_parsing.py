@@ -1,9 +1,10 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import gzip
+import sys
 import unittest
 
-from ivsblastn.blast import parse_blast
+from ivsblastn.blast import parse_blast, run_external_command
 
 
 class BlastParsingTests(unittest.TestCase):
@@ -21,6 +22,16 @@ class BlastParsingTests(unittest.TestCase):
             self.assertIn("s1", grouped["q1"])
             self.assertNotIn("s2", grouped["q1"])
             self.assertNotIn("s3", grouped["q1"])
+
+    def test_external_command_failure_reports_stderr(self) -> None:
+        cmd = [
+            sys.executable,
+            "-c",
+            "import sys; sys.stderr.write('blast database missing\\n'); raise SystemExit(2)",
+        ]
+
+        with self.assertRaisesRegex(RuntimeError, "blast database missing"):
+            run_external_command(cmd, "BLASTN")
 
 
 if __name__ == "__main__":

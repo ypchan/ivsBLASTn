@@ -1,6 +1,8 @@
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
-from ivsblastn.cli import build_parser, normalize_legacy_argv
+from ivsblastn.cli import build_parser, normalize_legacy_argv, validate_run_args
 
 
 class CliDefaultTests(unittest.TestCase):
@@ -61,6 +63,31 @@ class CliDefaultTests(unittest.TestCase):
         self.assertEqual(args.breakpoint_window, 20)
         self.assertEqual(args.min_output_confidence, "MEDIUM")
         self.assertFalse(args.gzip_fasta_output)
+
+    def test_run_validation_reports_missing_blast_db_prefix(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            query = tmp / "query.fa"
+            taxonomy = tmp / "reference.tax.tsv"
+            query.write_text(">q1\nACGT\n", encoding="utf-8")
+            taxonomy.write_text("s1\tArchaea;Genus species\n", encoding="utf-8")
+
+            args = build_parser().parse_args(
+                [
+                    "run",
+                    "--query",
+                    str(query),
+                    "--db",
+                    str(tmp / "missing_db"),
+                    "--taxonomy",
+                    str(taxonomy),
+                    "--outdir",
+                    str(tmp / "out"),
+                ]
+            )
+
+            with self.assertRaisesRegex(FileNotFoundError, "BLAST DB files not found"):
+                validate_run_args(args)
 
 
 if __name__ == "__main__":

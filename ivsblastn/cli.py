@@ -322,6 +322,8 @@ def validate_run_args(args: argparse.Namespace) -> None:
         raise FileNotFoundError(f"BLAST table not found: {args.blast}")
     if args.ref_fasta is not None and not args.ref_fasta.exists():
         raise FileNotFoundError(f"Reference FASTA not found: {args.ref_fasta}")
+    if args.db is not None and not blast_db_prefix_exists(args.db):
+        raise FileNotFoundError(f"BLAST DB files not found for prefix: {args.db}")
     if args.taxonomy is not None and not args.taxonomy.exists():
         raise FileNotFoundError(f"Taxonomy table not found: {args.taxonomy}")
     if args.min_intron_len > args.max_intron_len:

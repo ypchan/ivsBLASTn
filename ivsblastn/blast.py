@@ -11,12 +11,26 @@ from .fasta import open_text_auto
 from .logging import LOG
 from .models import HSP
 
+
+def run_external_command(cmd: List[str], label: str) -> None:
+    """Run an external command and include stderr in failures."""
+
+    completed = subprocess.run(cmd, text=True, capture_output=True)
+    if completed.stdout:
+        LOG.debug("%s stdout:\n%s", label, completed.stdout.rstrip())
+    if completed.stderr:
+        LOG.debug("%s stderr:\n%s", label, completed.stderr.rstrip())
+    if completed.returncode != 0:
+        details = completed.stderr.strip() or completed.stdout.strip() or "no stderr/stdout captured"
+        raise RuntimeError(f"{label} failed with exit code {completed.returncode}:\n{details}")
+
+
 def make_blast_db(fasta: Path, db_prefix: Path, makeblastdb_bin: str) -> None:
     """Build nucleotide BLAST database."""
 
     cmd = [makeblastdb_bin, "-in", str(fasta), "-dbtype", "nucl", "-out", str(db_prefix)]
     LOG.info("Running makeblastdb: %s", " ".join(cmd))
-    subprocess.run(cmd, check=True)
+    run_external_command(cmd, "makeblastdb")
 
 
 def run_blastn_to_file(query: Path, db: Path, out_file: Path, args: argparse.Namespace, max_targets: int, max_hsps: int, label: str) -> Path:
@@ -44,7 +58,7 @@ def run_blastn_to_file(query: Path, db: Path, out_file: Path, args: argparse.Nam
     if args.blast_evalue:
         cmd.extend(["-evalue", str(args.blast_evalue)])
     LOG.info("Running %s: %s", label, " ".join(cmd))
-    subprocess.run(cmd, check=True)
+    run_external_command(cmd, label)
     return out_file
 
 
