@@ -104,6 +104,10 @@ class BatchWorkflowTests(unittest.TestCase):
             self.assertIn("--min-output-confidence MEDIUM", script)
             self.assertIn("awk -F '\\t'", script)
             self.assertIn(f"CHUNK_OUTDIR={tmp / 'run'}/${{CHUNK_NAME}}", script)
+            self.assertIn("slurm_array_task_id=${SLURM_ARRAY_TASK_ID:-NA}", script)
+            self.assertIn("chunk_outdir=$CHUNK_OUTDIR", script)
+            self.assertIn("set -x", script)
+            self.assertIn("exit_status=${status}", script)
 
     def test_slurm_script_supports_commercial_resource_directives(self) -> None:
         with TemporaryDirectory() as tmpdir:
@@ -149,6 +153,8 @@ class BatchWorkflowTests(unittest.TestCase):
             self.assertIn("#SBATCH --mail-type=END", script)
             self.assertIn("#SBATCH --comment=ivsBLASTn", script)
             self.assertIn(f"CHUNK_OUTDIR={tmp / 'chunk_runs'}/${{CHUNK_NAME}}", script)
+            self.assertIn("account=prj_219_3", script)
+            self.assertIn("qos=qos_prj_219_3", script)
 
 
 if __name__ == "__main__":

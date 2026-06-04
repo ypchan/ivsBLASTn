@@ -153,10 +153,48 @@ def render_slurm_array_script(
         rendered_command = " \\\n".join(command_lines) + " \\\n" + f"  {extra_run_args}\n"
     else:
         rendered_command = " \\\n".join(command_lines) + "\n"
+    forwarded_args_log = "\n".join(run_args or ["(none)"])
+    extra_run_args_log = extra_run_args if extra_run_args else "(none)"
+    taxonomy_log = str(taxonomy.resolve()) if taxonomy else "(none)"
+    static_log = f"""ivsBLASTn task parameters
+manifest={manifest.resolve()}
+db={db.resolve()}
+taxonomy={taxonomy_log}
+batch_outdir={outdir_abs}
+chunk_runs_dir={chunk_runs_abs}
+threads={threads}
+top_subjects={top_subjects}
+blast_max_hsps={blast_max_hsps}
+cpus_per_task={cpus_per_task}
+mem={mem}
+time={time}
+partition={partition or '(none)'}
+account={account or '(none)'}
+qos={qos or '(none)'}
+nodes={nodes or '(none)'}
+ntasks={ntasks or '(none)'}
+array={array_spec}
+extra_run_args={extra_run_args_log}
+forwarded_run_args:
+{forwarded_args_log}
+"""
 
     return f"""{header}
 
 set -euo pipefail
+trap 'status=$?; echo "[$(date -Is)] ivsBLASTn task finished exit_status=${{status}}"; exit ${{status}}' EXIT
+
+echo "[$(date -Is)] ivsBLASTn task started"
+echo "slurm_job_id=${{SLURM_JOB_ID:-NA}}"
+echo "slurm_array_job_id=${{SLURM_ARRAY_JOB_ID:-NA}}"
+echo "slurm_array_task_id=${{SLURM_ARRAY_TASK_ID:-NA}}"
+echo "slurm_submit_dir=${{SLURM_SUBMIT_DIR:-NA}}"
+echo "hostname=$(hostname)"
+echo "workdir=$(pwd)"
+
+cat <<'IVSBLASTN_STATIC_TASK_LOG'
+{static_log.rstrip()}
+IVSBLASTN_STATIC_TASK_LOG
 
 MANIFEST={manifest_arg}
 CHUNK_FASTA=$(awk -F '\\t' -v task_id=\"${{SLURM_ARRAY_TASK_ID}}\" 'NR == task_id + 1 {{print $2}}' \"$MANIFEST\")
@@ -172,7 +210,13 @@ CHUNK_NAME=\"${{CHUNK_NAME%.fa}}\"
 CHUNK_NAME=\"${{CHUNK_NAME%.fna}}\"
 CHUNK_OUTDIR={chunk_runs_arg}/${{CHUNK_NAME}}
 
+echo "chunk_fasta=$CHUNK_FASTA"
+echo "chunk_name=$CHUNK_NAME"
+echo "chunk_outdir=$CHUNK_OUTDIR"
+echo "[$(date -Is)] Running ivsBLASTn chunk command"
+set -x
 {rendered_command}\
+set +x
 """
 
 

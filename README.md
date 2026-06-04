@@ -381,6 +381,30 @@ This writes:
 
 Other platform-specific directives can be set with `--nodes`, `--ntasks`, `--constraint`, `--gres`, `--exclude`, `--nodelist`, or repeated `--sbatch-option`.
 
+If your platform documentation gives:
+
+```text
+#SBATCH --partition=normal_fcp1
+#SBATCH --qos=qos_prj_219_3
+#SBATCH --account=prj_219_3
+```
+
+pass them as:
+
+```bash
+--partition normal_fcp1 \
+--qos qos_prj_219_3 \
+--account prj_219_3
+```
+
+Slurm stdout/stderr logs are written under:
+
+```text
+batch01/slurm/logs/
+```
+
+Each array task log records the Slurm job/task IDs, hostname, chunk FASTA, chunk output directory, DB, taxonomy file, `threads`, `top-subjects`, `blast-max-hsps`, partition, account, QoS, forwarded detection parameters, and the exact `ivsBLASTn run` command printed by shell tracing.
+
 Review:
 
 ```text
