@@ -1,70 +1,42 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="620" viewBox="0 0 1180 620" role="img" aria-labelledby="title desc">
-  <title id="title">Confidence scoring model</title>
-  <desc id="desc">Confidence is assigned from unique supporting subjects and unique taxa at the selected rank, defaulting to genus-level support.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" role="img" aria-labelledby="title desc">
+  <title id="title">Confidence model decision matrix</title>
+  <desc id="desc">Matrix and formulas for assigning HIGH, MEDIUM, LOW, or NONE confidence from subject and taxonomic support.</desc>
   <defs>
-    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
-      <path d="M0,0 L10,5 L0,10 Z" fill="#334155"/>
-    </marker>
-    <filter id="shadow" x="-8%" y="-8%" width="116%" height="126%">
-      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#0f172a" flood-opacity="0.13"/>
-    </filter>
     <style>
-      .bg { fill: #f8fafc; }
-      .title { font: 700 28px Arial, sans-serif; fill: #0f172a; }
-      .subtitle { font: 400 16px Arial, sans-serif; fill: #475569; }
-      .box { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.4; rx: 12; filter: url(#shadow); }
-      .input { fill: #eff6ff; stroke: #93c5fd; }
-      .calc { fill: #ecfdf5; stroke: #86efac; }
-      .high { fill: #dcfce7; stroke: #22c55e; }
-      .med { fill: #fef9c3; stroke: #eab308; }
-      .low { fill: #ffedd5; stroke: #fb923c; }
-      .none { fill: #fee2e2; stroke: #f87171; }
-      .text { font: 700 16px Arial, sans-serif; fill: #1e293b; }
-      .small { font: 400 13px Arial, sans-serif; fill: #475569; }
-      .formula { font: 700 14px Consolas, monospace; fill: #334155; }
-      .arrow { stroke: #334155; stroke-width: 2.2; marker-end: url(#arrow); fill: none; }
+      .bg{fill:#fff}.grid{fill:#f8fafc;stroke:#cbd5e1;stroke-width:1}.head{fill:#e2e8f0}.high{fill:#bbf7d0}.med{fill:#fef08a}.low{fill:#fed7aa}.none{fill:#fecaca}.title{font:700 26px Arial,sans-serif;fill:#0f172a}.label{font:700 15px Arial,sans-serif;fill:#1e293b}.small{font:400 13px Arial,sans-serif;fill:#475569}.mono{font:700 14px Consolas,monospace;fill:#334155}.axis{font:700 14px Arial,sans-serif;fill:#334155}
     </style>
   </defs>
+  <rect class="bg" width="1280" height="720"/>
+  <text class="title" x="52" y="52">Confidence scoring model</text>
+  <text class="small" x="52" y="80">Evidence tiering based on independent supporting subjects and taxonomic spread; not a probability model.</text>
 
-  <rect class="bg" width="1180" height="620"/>
-  <text class="title" x="52" y="58">Confidence scoring</text>
-  <text class="subtitle" x="52" y="86">Confidence is evidence tiering, not a statistical probability.</text>
+  <rect class="grid" x="70" y="125" width="560" height="430" rx="8"/>
+  <rect class="head" x="170" y="125" width="480" height="60"/>
+  <rect class="head" x="70" y="185" width="100" height="360"/>
+  <text class="axis" x="315" y="158">support_taxa at --tax-rank</text>
+  <text class="axis" x="88" y="330" transform="rotate(-90 88 330)">support_subjects</text>
 
-  <rect class="box input" x="70" y="150" width="285" height="135"/>
-  <text class="text" x="108" y="186">Best support cluster</text>
-  <text class="small" x="108" y="214">clustered candidate breakpoints</text>
-  <text class="small" x="108" y="236">one best HSP pair per subject</text>
-  <text class="small" x="108" y="258">selected by support and pair score</text>
+  <text class="label" x="210" y="222">0</text><text class="label" x="330" y="222">1-2</text><text class="label" x="465" y="222">>=3</text>
+  <text class="label" x="112" y="285">0</text><text class="label" x="102" y="370">1-2</text><text class="label" x="98" y="455">>=3</text><text class="label" x="92" y="530">>=10</text>
 
-  <rect class="box calc" x="445" y="130" width="305" height="175"/>
-  <text class="text" x="483" y="166">Support counts</text>
-  <text class="formula" x="483" y="198">support_subjects</text>
-  <text class="small" x="483" y="220">= unique subject IDs</text>
-  <text class="formula" x="483" y="252">support_taxa</text>
-  <text class="small" x="483" y="274">= unique taxa at --tax-rank</text>
-  <text class="small" x="483" y="294">default rank: genus</text>
+  <rect class="none" x="170" y="245" width="160" height="80"/><rect class="none" x="330" y="245" width="160" height="80"/><rect class="none" x="490" y="245" width="160" height="80"/>
+  <rect class="low" x="170" y="325" width="160" height="80"/><rect class="low" x="330" y="325" width="160" height="80"/><rect class="low" x="490" y="325" width="160" height="80"/>
+  <rect class="low" x="170" y="405" width="160" height="80"/><rect class="low" x="330" y="405" width="160" height="80"/><rect class="med" x="490" y="405" width="160" height="80"/>
+  <rect class="low" x="170" y="485" width="160" height="80"/><rect class="low" x="330" y="485" width="160" height="80"/><rect class="high" x="490" y="485" width="160" height="80"/>
 
-  <rect class="box high" x="840" y="95" width="260" height="96"/>
-  <text class="text" x="878" y="130">HIGH</text>
-  <text class="formula" x="878" y="158">subjects &gt;= 10</text>
-  <text class="formula" x="878" y="178">taxa &gt;= 3</text>
+  <text class="label" x="220" y="292">NONE</text><text class="label" x="380" y="292">NONE</text><text class="label" x="540" y="292">NONE</text>
+  <text class="label" x="228" y="372">LOW</text><text class="label" x="388" y="372">LOW</text><text class="label" x="548" y="372">LOW</text>
+  <text class="label" x="228" y="452">LOW</text><text class="label" x="388" y="452">LOW</text><text class="label" x="535" y="452">MEDIUM</text>
+  <text class="label" x="228" y="532">LOW</text><text class="label" x="388" y="532">LOW</text><text class="label" x="542" y="532">HIGH</text>
 
-  <rect class="box med" x="840" y="225" width="260" height="96"/>
-  <text class="text" x="878" y="260">MEDIUM</text>
-  <text class="formula" x="878" y="288">subjects &gt;= 3</text>
-  <text class="formula" x="878" y="308">taxa &gt;= 3</text>
-
-  <rect class="box low" x="840" y="355" width="260" height="84"/>
-  <text class="text" x="878" y="390">LOW</text>
-  <text class="formula" x="878" y="418">subjects &gt;= 1</text>
-
-  <rect class="box none" x="840" y="475" width="260" height="72"/>
-  <text class="text" x="878" y="510">NONE</text>
-  <text class="small" x="878" y="532">no supported HSP-gap cluster</text>
-
-  <path class="arrow" d="M355 218 H445"/>
-  <path class="arrow" d="M750 218 C805 190, 815 150, 840 143"/>
-  <path class="arrow" d="M750 218 C810 230, 815 260, 840 273"/>
-  <path class="arrow" d="M750 242 C810 310, 815 375, 840 397"/>
-  <path class="arrow" d="M750 266 C812 368, 815 488, 840 511"/>
+  <rect class="grid" x="710" y="125" width="520" height="430" rx="8"/>
+  <text class="label" x="750" y="170">Definitions</text>
+  <text class="mono" x="760" y="212">support_subjects = count_unique(subject_id)</text>
+  <text class="mono" x="760" y="250">support_taxa = count_unique(taxon_at_rank)</text>
+  <text class="small" x="760" y="282">Default taxonomic rank is genus.</text>
+  <text class="label" x="750" y="345">Cluster selection priority</text>
+  <text class="mono" x="760" y="385">1. number of supporting subjects</text>
+  <text class="mono" x="760" y="423">2. number of non-NA taxa</text>
+  <text class="mono" x="760" y="461">3. sum(pair_score)</text>
+  <text class="small" x="760" y="515">Each subject contributes at most one best HSP pair to a candidate breakpoint cluster.</text>
 </svg>

@@ -25,7 +25,7 @@ from .split import split_fasta
 from .taxonomy import parse_taxonomy
 
 
-SUBCOMMANDS = {"run", "split", "submit-slurm", "merge"}
+SUBCOMMANDS = {"run", "init-reference", "split", "submit-slurm", "merge"}
 
 
 def positive_int(value: str) -> int:
@@ -119,6 +119,39 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser = subparsers.add_parser("run", help="Run IVS detection on one query FASTA or one chunk.", formatter_class=RichHelpFormatter)
     add_run_args(run_parser)
     run_parser.set_defaults(func=run_command)
+
+    init_ref_parser = subparsers.add_parser("init-reference", help="Prepare a reusable reference FASTA, taxonomy TSV, and BLAST DB.", formatter_class=RichHelpFormatter)
+    init_ref_parser.add_argument("--ref-fasta", required=True, type=Path, help="SILVA-style reference FASTA/FASTA.gz with taxonomy in headers.")
+    init_ref_parser.add_argument("--outdir", required=True, type=Path, help="Reference initialization output directory.")
+    init_ref_parser.add_argument("--ref-domains", default="Archaea,Bacteria", help="Comma-separated SILVA domains retained. Default: Archaea,Bacteria.")
+    init_ref_parser.add_argument("--ref-per-species", default=1, type=nonnegative_int, help="Maximum sequences per clear species, longest first. Use 0 to disable. Default: 1.")
+    init_ref_parser.add_argument("--clean-ref-introns", action="store_true", help="Self-BLAST reference and remove candidate IVSs before final DB creation.")
+    init_ref_parser.add_argument("--ref-clean-min-confidence", default="LOW", choices=["LOW", "MEDIUM", "HIGH"], help="Minimum confidence required to remove a reference IVS. Default: LOW.")
+    init_ref_parser.add_argument("--ref-self-blast-max-target-seqs", default=100, type=positive_int, help="Reference self-BLAST -max_target_seqs. Default: 100.")
+    init_ref_parser.add_argument("--ref-self-blast-max-hsps", default=20, type=positive_int, help="Reference self-BLAST -max_hsps. Default: 20.")
+    init_ref_parser.add_argument("--min-pident", default=75.0, type=probability_percent, help="Minimum HSP percent identity for optional self-cleaning. Default: 75.0.")
+    init_ref_parser.add_argument("--min-hsp-len", default=100, type=positive_int, help="Minimum HSP length for optional self-cleaning. Default: 100.")
+    init_ref_parser.add_argument("--min-intron-len", default=25, type=nonnegative_int, help="Minimum query gap size for optional self-cleaning. Default: 25 bp.")
+    init_ref_parser.add_argument("--max-intron-len", default=2000, type=positive_int, help="Maximum query gap size for optional self-cleaning. Default: 2000 bp.")
+    init_ref_parser.add_argument("--max-ref-gap", default=30, type=nonnegative_int, help="Maximum absolute reference gap/overlap for optional self-cleaning. Default: 30 bp.")
+    init_ref_parser.add_argument("--max-query-overlap", default=20, type=nonnegative_int, help="Maximum allowed query HSP overlap. Default: 20 bp.")
+    init_ref_parser.add_argument("--breakpoint-window", default=30, type=nonnegative_int, help="Breakpoint clustering window. Default: 30 bp.")
+    init_ref_parser.add_argument("--top-subjects", default=100, type=positive_int, help="Top subjects retained per reference during optional self-cleaning. Default: 100.")
+    init_ref_parser.add_argument("--algorithm", default="hsp-gap-support", choices=["hsp-gap-support"], help="Detection algorithm for optional self-cleaning. Default: hsp-gap-support.")
+    init_ref_parser.add_argument("--tax-rank", default="genus", choices=["domain", "phylum", "class", "order", "family", "genus", "species"], help="Taxonomic rank used during optional self-cleaning. Default: genus.")
+    init_ref_parser.add_argument("--min-support-subjects", default=1, type=positive_int, help="Minimum subjects for LOW confidence. Default: 1.")
+    init_ref_parser.add_argument("--medium-support-subjects", default=3, type=positive_int, help="Minimum subjects for MEDIUM confidence. Default: 3.")
+    init_ref_parser.add_argument("--medium-support-taxa", default=3, type=positive_int, help="Minimum taxa for MEDIUM confidence. Default: 3.")
+    init_ref_parser.add_argument("--high-support-subjects", default=10, type=positive_int, help="Minimum subjects for HIGH confidence. Default: 10.")
+    init_ref_parser.add_argument("--high-support-taxa", default=3, type=positive_int, help="Minimum taxa for HIGH confidence. Default: 3.")
+    init_ref_parser.add_argument("--min-output-confidence", default="LOW", choices=["LOW", "MEDIUM", "HIGH"], help=argparse.SUPPRESS)
+    init_ref_parser.add_argument("--threads", default=4, type=positive_int, help="Worker and BLASTN threads for optional self-cleaning. Default: 4.")
+    init_ref_parser.add_argument("--makeblastdb-bin", default="makeblastdb", help="makeblastdb executable. Default: makeblastdb.")
+    init_ref_parser.add_argument("--blastn-bin", default="blastn", help="blastn executable. Default: blastn.")
+    init_ref_parser.add_argument("--blast-task", default="blastn", choices=["blastn", "megablast", "dc-megablast", "blastn-short"], help="BLASTN task for optional self-cleaning. Default: blastn.")
+    init_ref_parser.add_argument("--blast-evalue", default="1e-20", help="BLASTN e-value for optional self-cleaning. Default: 1e-20.")
+    add_common_logging_args(init_ref_parser)
+    init_ref_parser.set_defaults(func=init_reference_command)
 
     split_parser = subparsers.add_parser("split", help="Split a large query FASTA into chunk FASTA files.", formatter_class=RichHelpFormatter)
     split_parser.add_argument("--query", required=True, type=Path, help="Input query FASTA/FASTA.gz.")
@@ -271,6 +304,53 @@ def run_pipeline(args: argparse.Namespace) -> int:
 
 def run_command(args: argparse.Namespace) -> int:
     return run_pipeline(args)
+
+
+def setup_reference_output_paths(args: argparse.Namespace) -> None:
+    """Populate paths expected by reference preprocessing for init-reference."""
+
+    args.reference_dir = args.outdir
+    args.blast_dir = args.outdir / "blast"
+    args.results_dir = args.outdir / "results"
+    for directory in [args.outdir, args.blast_dir, args.results_dir]:
+        directory.mkdir(parents=True, exist_ok=True)
+    args.raw_ref_fa = args.outdir / "raw_reference.fa"
+    args.raw_ref_tax = args.outdir / "raw_reference.tax.tsv"
+    args.raw_ref_db = args.outdir / "raw_reference_db"
+    args.ref_self_blast = args.blast_dir / "reference_self.blastn.tsv"
+    args.ref_self_clean_prefix = args.results_dir / "reference_self_clean"
+    args.cleaned_ref_fa = args.outdir / "cleaned_reference.fa"
+    args.cleaned_ref_tax = args.outdir / "cleaned_reference.tax.tsv"
+    args.cleaned_ref_db = args.outdir / "cleaned_reference_db"
+    args.query = args.ref_fasta
+    args.blast = None
+    args.db = None
+    args.taxonomy = None
+
+
+def init_reference_command(args: argparse.Namespace) -> int:
+    if not args.ref_fasta.exists():
+        raise FileNotFoundError(f"Reference FASTA not found: {args.ref_fasta}")
+    if args.min_intron_len > args.max_intron_len:
+        raise ValueError("--min-intron-len must be <= --max-intron-len")
+    setup_reference_output_paths(args)
+    ref_fa, taxonomy_tsv, db_prefix = preprocess_reference(args)
+    if args.clean_ref_introns:
+        ref_fa, taxonomy_tsv, db_prefix = clean_reference_introns(args, ref_fa, taxonomy_tsv, db_prefix)
+
+    manifest = args.outdir / "reference_manifest.tsv"
+    with manifest.open("wt", encoding="utf-8") as handle:
+        print("key\tpath", file=handle)
+        print(f"reference_fasta\t{ref_fa.resolve()}", file=handle)
+        print(f"taxonomy_tsv\t{taxonomy_tsv.resolve()}", file=handle)
+        print(f"blast_db_prefix\t{db_prefix.resolve()}", file=handle)
+
+    CONSOLE.print("Reference initialized")
+    CONSOLE.print(f"  DB prefix: {db_prefix}")
+    CONSOLE.print(f"  Taxonomy:  {taxonomy_tsv}")
+    CONSOLE.print("Use with:")
+    CONSOLE.print(f"  ivsBLASTn run --query query.fa --db {db_prefix} --taxonomy {taxonomy_tsv} --outdir ivs_run")
+    return 0
 
 
 def split_command(args: argparse.Namespace) -> int:

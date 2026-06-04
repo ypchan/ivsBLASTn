@@ -1,60 +1,60 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Generator: Adobe Illustrator 26.5.0, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
-<svg version="1.1" id="图层_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
-	 viewBox="0 0 903.4 407.1" style="enable-background:new 0 0 903.4 407.1;" xml:space="preserve">
-<style type="text/css">
-	.st0{opacity:0.29;fill:#475569;}
-	.st1{fill:#0F172A;}
-	.st2{font-family:'Arial-BoldMT';}
-	.st3{font-size:14px;}
-	.st4{fill:#475569;}
-	.st5{font-family:'ArialMT';}
-	.st6{font-size:12px;}
-	.st7{fill:#1E293B;}
-	.st8{fill:none;stroke:#94A3B8;stroke-width:6;stroke-linecap:round;}
-	.st9{fill:#2563EB;}
-	.st10{fill:#F97316;}
-	.st11{fill:#16A34A;}
-	.st12{fill:#EF4444;}
-	.st13{fill:none;stroke:#EF4444;stroke-width:5;stroke-linecap:round;stroke-dasharray:12,10;}
-	.st14{fill:#FF1F00;}
-	.st15{fill:none;}
-	.st16{fill:#334155;}
-</style>
-<rect x="283.4" y="243" class="st0" width="580" height="64.9"/>
-<polygon class="st0" points="682.3,135.1 543.4,203.5 863.4,203.5 863.4,133.1 "/>
-<polygon class="st0" points="283.4,133.5 283.4,206 530.7,206 487.6,133.1 "/>
-<text transform="matrix(1 0 0 1 9.3585 17.0347)" class="st1 st2 st3">HSP-gap evidence model</text>
-<text transform="matrix(1 0 0 1 9.3585 45.0347)" class="st4 st5 st6">The detector needs split query HSPs against intron-free references; rare intron-containing references are handled by self-cleaning and near-best consensus.</text>
-<text transform="matrix(1 0 0 1 43.3585 127.0347)" class="st7 st5 st6">Query with candidate intron</text>
-<line class="st8" x1="263.4" y1="119" x2="883.4" y2="119"/>
-<path class="st9" d="M291.4,97h194c4.4,0,8,3.6,8,8v28c0,4.4-3.6,8-8,8h-194c-4.4,0-8-3.6-8-8v-28C283.4,100.6,286.9,97,291.4,97z"
-	/>
-<path class="st10" d="M521.4,97h134c4.4,0,8,3.6,8,8v28c0,4.4-3.6,8-8,8h-134c-4.4,0-8-3.6-8-8v-28C513.4,100.6,516.9,97,521.4,97z"
-	/>
-<path class="st9" d="M691.4,97h164c4.4,0,8,3.6,8,8v28c0,4.4-3.6,8-8,8h-164c-4.4,0-8-3.6-8-8v-28C683.4,100.6,686.9,97,691.4,97z"
-	/>
-<text transform="matrix(1 0 0 1 356.3585 125.0347)" class="st4 st5 st6">HSP1</text>
-<text transform="matrix(1 0 0 1 548.3585 125.0347)" class="st4 st5 st6">query gap / intron</text>
-<text transform="matrix(1 0 0 1 743.3585 125.0347)" class="st4 st5 st6">HSP2</text>
-<text transform="matrix(1 0 0 1 43.3585 229.0347)" class="st7 st5 st6">Clean reference</text>
-<line class="st8" x1="263.4" y1="221" x2="883.4" y2="221"/>
-<path class="st11" d="M291.4,199h234c4.4,0,8,3.6,8,8v28c0,4.4-3.6,8-8,8h-234c-4.4,0-8-3.6-8-8v-28
-	C283.4,202.6,286.9,199,291.4,199z"/>
-<path class="st11" d="M551.4,199h304c4.4,0,8,3.6,8,8v28c0,4.4-3.6,8-8,8h-304c-4.4,0-8-3.6-8-8v-28
-	C543.4,202.6,546.9,199,551.4,199z"/>
-<text transform="matrix(1 0 0 1 347.3585 227.0347)" class="st4 st5 st6">left HSP</text>
-<text transform="matrix(1 0 0 1 637.3585 227.0347)" class="st4 st5 st6">right HSP</text>
-<text transform="matrix(1 0 0 1 385.4962 286.1043)" class="st4 st2 st6">subject is near-continuous: gap can be 0, small positive, or slight overlap</text>
-<text transform="matrix(1 0 0 1 43.3585 333.0347)" class="st7 st5 st6">Intron-containing reference</text>
-<line class="st8" x1="263.4" y1="325" x2="883.4" y2="325"/>
-<path class="st12" d="M291.4,303h564c4.4,0,8,3.6,8,8v28c0,4.4-3.6,8-8,8h-564c-4.4,0-8-3.6-8-8v-28
-	C283.4,306.6,286.9,303,291.4,303z"/>
-<line class="st13" x1="511.4" y1="325" x2="663.4" y2="325"/>
-<text transform="matrix(1 0 0 1 428.3585 331.0347)" class="st4 st5 st6">one ungapped high-similarity hit</text>
-<text transform="matrix(1 0 0 1 41.727 389.8866)" class="st14 st5 st6">Risk: this subject already contains the intron, so it may produce no split-HSP evidence.</text>
-<path class="st15" d=""/>
-<path class="st16" d="M878.4,424.9"/>
-<text transform="matrix(1 0 0 1 42.6747 371.814)" class="st14 st5 st6">Clean reference first; use many near-best subjects</text>
-<path class="st4" d="M-204.2-247.7"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" role="img" aria-labelledby="title desc">
+  <title id="title">HSP-gap support geometry</title>
+  <desc id="desc">Technical diagram showing query-side IVS gap, subject-side near-continuity, coordinate formulas, and the non-supporting intron-bearing reference case.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#1f2937"/>
+    </marker>
+    <style>
+      .bg{fill:#ffffff}.panel{fill:#f8fafc;stroke:#cbd5e1;stroke-width:1.2}.axis{stroke:#334155;stroke-width:2}.thin{stroke:#64748b;stroke-width:1.2}.dash{stroke:#ef4444;stroke-width:2;stroke-dasharray:7 6}.hsp{fill:#2563eb}.ivs{fill:#f97316}.ref{fill:#16a34a}.risk{fill:#dc2626}.label{font:700 16px Arial,sans-serif;fill:#0f172a}.small{font:400 13px Arial,sans-serif;fill:#475569}.mono{font:700 14px Consolas,monospace;fill:#1e293b}.note{font:400 12px Arial,sans-serif;fill:#64748b}.arrow{stroke:#1f2937;stroke-width:1.8;fill:none;marker-end:url(#arrow)}
+    </style>
+  </defs>
+  <rect class="bg" width="1280" height="720"/>
+  <text class="label" x="48" y="48" style="font-size:26px">HSP-gap evidence model</text>
+  <text class="small" x="48" y="76">A candidate IVS is supported when a large query interval is skipped while the reference subject remains nearly continuous.</text>
+
+  <rect class="panel" x="48" y="112" width="1184" height="255" rx="10"/>
+  <text class="label" x="78" y="148">Supporting case: IVS in query, absent from reference</text>
+
+  <text class="small" x="78" y="205">query coordinates</text>
+  <line class="axis" x1="250" y1="200" x2="1110" y2="200"/>
+  <rect class="hsp" x="285" y="178" width="270" height="44" rx="5"/>
+  <rect class="ivs" x="590" y="178" width="170" height="44" rx="5"/>
+  <rect class="hsp" x="795" y="178" width="240" height="44" rx="5"/>
+  <text class="mono" x="386" y="205" fill="#fff">HSP1</text>
+  <text class="mono" x="625" y="205" fill="#fff">query_gap</text>
+  <text class="mono" x="884" y="205" fill="#fff">HSP2</text>
+
+  <text class="small" x="78" y="292">subject coordinates</text>
+  <line class="axis" x1="250" y1="287" x2="1110" y2="287"/>
+  <rect class="ref" x="285" y="265" width="345" height="44" rx="5"/>
+  <rect class="ref" x="646" y="265" width="389" height="44" rx="5"/>
+  <text class="mono" x="410" y="292" fill="#fff">left HSP</text>
+  <text class="mono" x="770" y="292" fill="#fff">right HSP</text>
+  <path class="dash" d="M630 287 H646"/>
+  <text class="mono" x="535" y="342">abs(subject_gap) &lt;= max_ref_gap</text>
+
+  <path class="thin" d="M555 226 V247"/>
+  <path class="thin" d="M590 226 V247"/>
+  <path class="thin" d="M760 226 V247"/>
+  <path class="thin" d="M795 226 V247"/>
+  <text class="note" x="560" y="246">left.qhi</text>
+  <text class="note" x="742" y="246">right.qlo</text>
+
+  <rect class="panel" x="48" y="395" width="560" height="250" rx="10"/>
+  <text class="label" x="78" y="432">Coordinate tests</text>
+  <text class="mono" x="92" y="474">query_gap = right.qlo - left.qhi - 1</text>
+  <text class="mono" x="92" y="504">intron_start = left.qhi + 1</text>
+  <text class="mono" x="92" y="534">intron_end   = right.qlo - 1</text>
+  <text class="mono" x="92" y="574">subject_gap = right.slo - left.shi - 1</text>
+  <text class="small" x="92" y="612">Accepted only when the query gap is IVS-sized and the subject gap is small.</text>
+
+  <rect class="panel" x="640" y="395" width="592" height="250" rx="10"/>
+  <text class="label" x="670" y="432">Non-supporting near-neighbor risk</text>
+  <text class="small" x="670" y="464">If the reference already contains the same IVS, BLASTN may report one long high-similarity HSP.</text>
+  <line class="axis" x1="700" y1="525" x2="1160" y2="525"/>
+  <rect class="risk" x="745" y="503" width="370" height="44" rx="5"/>
+  <line class="dash" x1="885" y1="525" x2="970" y2="525"/>
+  <text class="mono" x="820" y="530" fill="#fff">single ungapped hit</text>
+  <text class="small" x="670" y="590">Mitigation: reference self-cleaning and multiple near-best subjects.</text>
 </svg>

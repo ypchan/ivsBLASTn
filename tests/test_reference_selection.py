@@ -1,9 +1,11 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
+from unittest.mock import patch
 import unittest
 
 from ivsblastn.fasta import species_key_from_taxonomy
+from ivsblastn.cli import init_reference_command
 from ivsblastn.reference import preprocess_reference
 
 
@@ -55,6 +57,34 @@ class ReferenceSelectionTests(unittest.TestCase):
             self.assertIn(">long", selected_fasta)
             self.assertNotIn(">short", selected_fasta)
             self.assertNotIn(">unclear", selected_fasta)
+
+    def test_init_reference_command_writes_reusable_manifest(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            ref_fasta = tmp / "reference.fa"
+            outdir = tmp / "prepared"
+            ref_fasta.write_text(
+                ">ref1 Bacteria;P;C;O;F;Vibrio;Vibrio halioticoli\nATGCATGC\n",
+                encoding="utf-8",
+            )
+            args = SimpleNamespace(
+                ref_fasta=ref_fasta,
+                outdir=outdir,
+                ref_domains="Archaea,Bacteria",
+                ref_per_species=1,
+                clean_ref_introns=False,
+                min_intron_len=25,
+                max_intron_len=2000,
+                makeblastdb_bin="true",
+            )
+
+            with patch("ivsblastn.cli.CONSOLE.print"):
+                self.assertEqual(init_reference_command(args), 0)
+
+            manifest = (outdir / "reference_manifest.tsv").read_text(encoding="utf-8")
+            self.assertIn("blast_db_prefix", manifest)
+            self.assertTrue((outdir / "raw_reference.fa").exists())
+            self.assertTrue((outdir / "raw_reference.tax.tsv").exists())
 
 
 if __name__ == "__main__":

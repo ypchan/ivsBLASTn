@@ -25,6 +25,20 @@ class CliDefaultTests(unittest.TestCase):
         self.assertEqual(normalize_legacy_argv(["--query", "query.fa"]), ["run", "--query", "query.fa"])
         self.assertEqual(normalize_legacy_argv(["run", "--query", "query.fa"]), ["run", "--query", "query.fa"])
 
+    def test_init_reference_subcommand_exists(self) -> None:
+        args = build_parser().parse_args(
+            [
+                "init-reference",
+                "--ref-fasta",
+                "silva.fa",
+                "--outdir",
+                "reference",
+            ]
+        )
+
+        self.assertEqual(args.ref_per_species, 1)
+        self.assertFalse(args.clean_ref_introns)
+
 
 if __name__ == "__main__":
     unittest.main()

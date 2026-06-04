@@ -11,6 +11,14 @@ subject:  exon-left  nearly continuous exon-right
 
 In BLASTN output this appears as two HSPs on the query separated by a large query gap, while the subject-side coordinates remain adjacent or nearly adjacent.
 
+![ivsBLASTn system workflow](figures/detect_intron_workflow.svg)
+
+Method diagrams:
+
+- [HSP-gap support geometry](figures/hsp_gap_support.svg)
+- [Confidence scoring model](figures/confidence_model.svg)
+- [Reference self-cleaning method](figures/reference_self_clean.svg)
+
 ## Install
 
 Clone or download this repository, then install:
@@ -98,7 +106,7 @@ ivsBLASTn run --query query.fa --db ref_db --outdir out
 
 ## Reference Data
 
-### Starting From SILVA-Style FASTA
+### Initialize A Reusable Reference From SILVA-Style FASTA
 
 Use `--ref-fasta` when the reference FASTA header contains taxonomy after the sequence ID:
 
@@ -106,7 +114,37 @@ Use `--ref-fasta` when the reference FASTA header contains taxonomy after the se
 >AB000393.1.1510 Bacteria;Pseudomonadota;...;Vibrio;Vibrio halioticoli
 ```
 
-Example:
+Initialize once:
+
+```bash
+ivsBLASTn init-reference \
+  --ref-fasta SILVA_NR99.fa.gz \
+  --outdir reference_silva_nr99 \
+  --threads 8
+```
+
+This writes:
+
+```text
+reference_silva_nr99/
+  raw_reference.fa
+  raw_reference.tax.tsv
+  raw_reference_db.*
+  reference_manifest.tsv
+```
+
+Then reuse it:
+
+```bash
+ivsBLASTn run \
+  --query query_16s.fa \
+  --db reference_silva_nr99/raw_reference_db \
+  --taxonomy reference_silva_nr99/raw_reference.tax.tsv \
+  --outdir ivs_run \
+  --threads 8
+```
+
+You can still initialize and run in one command:
 
 ```bash
 ivsBLASTn run \
@@ -139,7 +177,7 @@ Vibrio 1234
 Vibrio sp001
 ```
 
-Outputs under `outdir/reference/` include:
+When `--ref-fasta` is used directly in `ivsBLASTn run`, outputs under `outdir/reference/` include:
 
 ```text
 raw_reference.fa
@@ -414,6 +452,157 @@ BED files:
 *.exons.bed        exon intervals after IVS removal
 ```
 
+## Algorithm Reference
+
+### HSP Coordinates
+
+For each BLAST HSP:
+
+```text
+qlo = min(qstart, qend)
+qhi = max(qstart, qend)
+slo = min(sstart, send)
+shi = max(sstart, send)
+qdir = +1 if qend >= qstart else -1
+sdir = +1 if send >= sstart else -1
+orientation = qdir * sdir
+```
+
+### HSP Prefiltering
+
+An HSP is discarded before geometry analysis when:
+
+```text
+pident < --min-pident
+length < --min-hsp-len
+```
+
+HSPs are grouped as:
+
+```text
+query_id -> subject_id -> list[HSP]
+```
+
+Subjects are ranked per query by total HSP bitscore:
+
+```text
+subject_score = sum(bitscore for all retained HSPs to that subject)
+```
+
+Only the top `--top-subjects` subjects are analyzed.
+
+### Candidate HSP-Pair Geometry
+
+Two HSPs are sorted by query coordinate:
+
+```text
+left, right = HSPs ordered by (qlo, qhi)
+```
+
+The candidate IVS interval is:
+
+```text
+query_gap = right.qlo - left.qhi - 1
+intron_start = left.qhi + 1
+intron_end   = right.qlo - 1
+intron_len   = intron_end - intron_start + 1
+```
+
+Accepted query-side geometry:
+
+```text
+--min-intron-len <= query_gap <= --max-intron-len
+--min-intron-len <= intron_len <= --max-intron-len
+```
+
+Subject-side continuity for same orientation:
+
+```text
+subject_gap = right.slo - left.shi - 1
+```
+
+Subject-side continuity for reverse orientation:
+
+```text
+subject_gap = left.slo - right.shi - 1
+```
+
+Accepted reference-side geometry:
+
+```text
+abs(subject_gap) <= --max-ref-gap
+```
+
+Pair score:
+
+```text
+pair_score = hsp1.bitscore + hsp2.bitscore - 2 * abs(subject_gap)
+```
+
+Each subject contributes at most one best HSP pair.
+
+### Breakpoint Clustering
+
+Support pairs are clustered by query-relative IVS coordinates:
+
+```text
+abs(pair.intron_start - median(cluster.intron_start)) <= --breakpoint-window
+abs(pair.intron_end   - median(cluster.intron_end))   <= --breakpoint-window
+```
+
+Clusters are ranked by:
+
+```text
+1. number of supporting pairs
+2. number of unique non-NA taxa at --tax-rank
+3. sum(pair_score)
+```
+
+Final IVS coordinates are median coordinates from the best cluster.
+
+### Confidence Rules
+
+Default confidence thresholds:
+
+| Confidence | Classification | Default rule |
+| --- | --- | --- |
+| `HIGH` | `HIGH_CONFIDENCE_16S_INTRON` | `support_subjects >= 10` and `support_taxa >= 3` |
+| `MEDIUM` | `MEDIUM_CONFIDENCE_16S_INTRON` | `support_subjects >= 3` and `support_taxa >= 3` |
+| `LOW` | `LOW_CONFIDENCE_16S_INTRON` | `support_subjects >= 1` |
+| `NONE` | `NO_INTRON_SIGNAL` | no supported HSP-gap cluster |
+
+The default `--tax-rank` is `genus`.
+
+### Output Field Semantics
+
+`*.summary.tsv` contains one row per query:
+
+| Field | Meaning |
+| --- | --- |
+| `query_id` | Query FASTA ID |
+| `query_len` | Query sequence length |
+| `classification` | Confidence class label |
+| `confidence` | `HIGH`, `MEDIUM`, `LOW`, or `NONE` |
+| `intron_start`, `intron_end`, `intron_len` | Query-relative 1-based closed IVS interval |
+| `exon1`, `exon2` | Query-relative exon intervals after IVS removal |
+| `support_subjects` | Unique supporting subjects in the best cluster |
+| `support_taxa_at_<rank>` | Unique taxa at selected rank |
+| `median_subject_gap` | Median subject-side gap/overlap |
+| `median_pident` | Median average identity across paired HSPs |
+| `best_subject` | Highest-scoring support subject |
+| `reasons` | Pipe-delimited algorithm metadata |
+
+`*.supporting_hsps.tsv` contains one row per supporting subject pair in the best cluster.
+
+## Known Limitations
+
+- Input query sequences should already be SSU/16S sequences; `ivsBLASTn` does not extract rRNA genes from genomes.
+- The method does not evaluate RNA secondary structure or splice motifs.
+- Final IVS coordinates are query-relative, not reference-relative.
+- Intron-containing references may align without a split HSP and therefore provide no support; use reference self-cleaning and enough `--top-subjects` when this is expected.
+- Missing taxonomy reduces `support_taxa` and makes MEDIUM/HIGH confidence harder to reach.
+- Direct `ivsBLASTn merge` skips gzip FASTA chunk outputs; run chunks without `--gzip-fasta-output` when direct FASTA merging is needed.
+
 ## Troubleshooting
 
 Missing BLAST+:
@@ -480,4 +669,6 @@ tests/
 figures/
 ```
 
-See [ivsBLASTn_technical_doc.md](ivsBLASTn_technical_doc.md) for the detailed algorithm reference.
+## License
+
+This project is released under the MIT License. See [LICENSE](LICENSE).
