@@ -387,6 +387,7 @@ def setup_reference_output_paths(args: argparse.Namespace) -> None:
     args.blast = None
     args.db = None
     args.taxonomy = None
+    args.blast_max_hsps = getattr(args, "ref_self_blast_max_hsps", 20)
 
 
 def init_reference_command(args: argparse.Namespace) -> int:

@@ -223,7 +223,7 @@ def write_report(path: Path, results: List[QueryResult], args: argparse.Namespac
             "min_output_confidence",
             "threads",
         ]:
-            print(f"- `{name}`: `{getattr(args, name)}`", file=handle)
+            print(f"- `{name}`: `{getattr(args, name, 'NA')}`", file=handle)
         print("", file=handle)
         print("## Summary", file=handle)
         print("", file=handle)

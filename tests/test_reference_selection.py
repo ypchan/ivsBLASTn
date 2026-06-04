@@ -5,7 +5,7 @@ from unittest.mock import patch
 import unittest
 
 from ivsblastn.fasta import read_fasta, species_key_from_taxonomy
-from ivsblastn.cli import init_reference_command
+from ivsblastn.cli import init_reference_command, setup_reference_output_paths
 from ivsblastn.reference import preprocess_reference
 
 
@@ -95,6 +95,18 @@ class ReferenceSelectionTests(unittest.TestCase):
             self.assertIn("blast_db_prefix", manifest)
             self.assertTrue((outdir / "raw_reference.fa").exists())
             self.assertTrue((outdir / "raw_reference.tax.tsv").exists())
+
+    def test_reference_output_paths_add_self_clean_report_compatibility_fields(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            args = SimpleNamespace(
+                ref_fasta=Path(tmpdir) / "reference.fa",
+                outdir=Path(tmpdir) / "prepared",
+                ref_self_blast_max_hsps=20,
+            )
+
+            setup_reference_output_paths(args)
+
+            self.assertEqual(args.blast_max_hsps, 20)
 
 
 if __name__ == "__main__":
