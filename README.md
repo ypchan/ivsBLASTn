@@ -160,22 +160,28 @@ Reference preprocessing rules:
 1. Keep only domains in `--ref-domains`, default `Archaea,Bacteria`.
 2. Normalize sequence text, convert `U` to `T`, and keep only non-empty `A/T/G/C` sequences.
 3. Require a clear species name in the seventh taxonomy field.
-4. Skip records where the species field has only a genus name.
-5. Skip records where the species epithet, the second word of the species name, contains digits.
-6. Keep the longest `--ref-per-species` records per clear species, default `1`.
+4. Keep the longest `--ref-per-species` records per clear species, default `1`.
+5. Records with unclear species names can still be retained as genus-level fallback references.
+6. Keep the longest `--ref-unclear-per-genus` unclear-species records per genus, default `5`.
 
-Accepted:
+Clear species example:
 
 ```text
 Vibrio halioticoli
 ```
 
-Skipped as unclear:
+Unclear species examples:
 
 ```text
 Vibrio
 Vibrio 1234
 Vibrio sp001
+```
+
+These are not used as species-level representatives, but can be retained by the genus fallback if the genus field is available. To restore strict skipping of unclear species, use:
+
+```bash
+--ref-unclear-per-genus 0
 ```
 
 When `--ref-fasta` is used directly in `ivsBLASTn run`, outputs under `outdir/reference/` include:
@@ -413,23 +419,23 @@ Reference selection is based on:
 
 ```text
 domain filter
-clear species name filter
 ATGC-only filter
 longest N records per species
+longest M unclear-species records per genus
 ```
 
-The "longest N per species" rule is composable, so it can be parallelized exactly:
+The "longest N per species" and "longest M unclear records per genus" rules are composable, so they can be parallelized exactly:
 
 ```text
 raw SILVA FASTA
   -> split raw reference FASTA into shards
-  -> each shard keeps local longest N per species
+  -> each shard keeps local longest N per species and local longest M unclear records per genus
   -> concatenate local candidate records
-  -> reduce again to global longest N per species
+  -> reduce again to global longest N per species and global longest M unclear records per genus
   -> build raw_reference.fa and raw_reference.tax.tsv
 ```
 
-This is a true map-reduce operation. It is safe because the global top N longest records for a species must be present in the union of each shard's local top N records for that species.
+This is a true map-reduce operation. It is safe because the global top N longest records for a species or genus fallback group must be present in the union of each shard's local top N records for that group.
 
 This is the recommended future optimization for very large SILVA-style FASTA files. It should be implemented as a dedicated reference-preparation workflow rather than by sharding the final BLAST database.
 

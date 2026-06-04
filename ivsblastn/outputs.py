@@ -207,6 +207,7 @@ def write_report(path: Path, results: List[QueryResult], args: argparse.Namespac
             "top_subjects",
             "ref_domains",
             "ref_per_species",
+            "ref_unclear_per_genus",
             "clean_ref_introns",
             "ref_clean_min_confidence",
             "ref_self_blast_max_target_seqs",

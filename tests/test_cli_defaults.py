@@ -19,6 +19,7 @@ class CliDefaultTests(unittest.TestCase):
 
         self.assertEqual(args.top_subjects, 100)
         self.assertEqual(args.blast_max_hsps, 5)
+        self.assertEqual(args.ref_unclear_per_genus, 5)
         self.assertFalse(hasattr(args, "blast_max_target_seqs"))
 
     def test_legacy_run_arguments_are_mapped_to_run_subcommand(self) -> None:
@@ -37,6 +38,7 @@ class CliDefaultTests(unittest.TestCase):
         )
 
         self.assertEqual(args.ref_per_species, 1)
+        self.assertEqual(args.ref_unclear_per_genus, 5)
         self.assertFalse(args.clean_ref_introns)
 
     def test_submit_slurm_forwards_detection_defaults(self) -> None:

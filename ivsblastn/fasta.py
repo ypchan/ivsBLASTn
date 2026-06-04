@@ -103,6 +103,18 @@ def taxonomy_domain(taxonomy: str) -> str:
     return parts[0] if parts else "NA"
 
 
+def genus_key_from_taxonomy(taxonomy: str) -> Optional[str]:
+    """Return a genus-level key when taxonomy contains a usable genus field."""
+
+    parts = [p.strip() for p in taxonomy.split(";") if p.strip()]
+    if len(parts) < 6:
+        return None
+    genus = parts[5]
+    if not genus or genus.upper() == "NA":
+        return None
+    return ";".join(parts[:6])
+
+
 def species_key_from_taxonomy(taxonomy: str) -> Optional[str]:
     """Return a species-level key when taxonomy contains a clear binomial."""
 

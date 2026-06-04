@@ -10,6 +10,7 @@ from .algorithm import analyze_query, confidence_rank, is_intron_result
 from .blast import make_blast_db, parse_blast, run_blastn_to_file
 from .fasta import (
     clean_dna_sequence,
+    genus_key_from_taxonomy,
     iter_fasta_records,
     is_strict_atgc,
     parse_silva_header,
@@ -29,14 +30,29 @@ def preprocess_reference(args: argparse.Namespace) -> Tuple[Path, Path, Path]:
 
     allowed_domains = {x.strip() for x in args.ref_domains.split(",") if x.strip()}
     selected_by_species: Dict[str, List[ReferenceRecord]] = defaultdict(list)
-    eligible = 0
+    selected_unclear_by_genus: Dict[str, List[ReferenceRecord]] = defaultdict(list)
+    eligible_clear = 0
+    eligible_unclear = 0
     skipped_domain = 0
     skipped_unclear_species = 0
     skipped_species_cap = 0
+    skipped_unclear_genus_cap = 0
     skipped_non_atgc = 0
     skipped_empty = 0
 
-    def keep_selected_record(record: ReferenceRecord, species_key: str) -> None:
+    def keep_capped_record(selection: Dict[str, List[ReferenceRecord]], key: str, record: ReferenceRecord, limit: int) -> None:
+        if limit == 0:
+            return
+        selected = selection[key]
+        selected.append(record)
+        selected.sort(key=lambda r: (-len(r.seq), r.order))
+        del selected[limit:]
+
+    def write_record(record: ReferenceRecord) -> None:
+        write_fasta_record(fa_out, record.seq_id, record.seq)
+        tax_writer.writerow([record.seq_id, record.taxonomy])
+
+    def keep_selected_species_record(record: ReferenceRecord, species_key: str) -> None:
         selected = selected_by_species[species_key]
         selected.append(record)
         selected.sort(key=lambda r: (-len(r.seq), r.order))
@@ -58,29 +74,46 @@ def preprocess_reference(args: argparse.Namespace) -> Tuple[Path, Path, Path]:
                 skipped_non_atgc += 1
                 continue
             species_key = species_key_from_taxonomy(taxonomy)
-            if species_key is None:
+            record = ReferenceRecord(order=record_order, seq_id=seq_id, taxonomy=taxonomy, seq=seq)
+            if species_key is not None:
+                eligible_clear += 1
+                if args.ref_per_species == 0:
+                    write_record(record)
+                else:
+                    keep_selected_species_record(record, species_key)
+                continue
+
+            genus_key = genus_key_from_taxonomy(taxonomy)
+            if genus_key is None or args.ref_unclear_per_genus == 0:
                 skipped_unclear_species += 1
                 continue
-            eligible += 1
-            record = ReferenceRecord(order=record_order, seq_id=seq_id, taxonomy=taxonomy, seq=seq)
-            if args.ref_per_species == 0:
-                write_fasta_record(fa_out, record.seq_id, record.seq)
-                tax_writer.writerow([record.seq_id, record.taxonomy])
-            else:
-                keep_selected_record(record, species_key)
+            eligible_unclear += 1
+            keep_capped_record(selected_unclear_by_genus, genus_key, record, args.ref_unclear_per_genus)
 
+        selected_records: List[ReferenceRecord] = []
         if args.ref_per_species > 0:
-            selected_records = sorted((record for records in selected_by_species.values() for record in records), key=lambda r: r.order)
-            skipped_species_cap = eligible - len(selected_records)
-            for record in selected_records:
-                write_fasta_record(fa_out, record.seq_id, record.seq)
-                tax_writer.writerow([record.seq_id, record.taxonomy])
+            selected_species_records = [record for records in selected_by_species.values() for record in records]
+            skipped_species_cap = eligible_clear - len(selected_species_records)
+            selected_records.extend(selected_species_records)
+        if args.ref_unclear_per_genus > 0:
+            selected_unclear_records = [record for records in selected_unclear_by_genus.values() for record in records]
+            skipped_unclear_genus_cap = eligible_unclear - len(selected_unclear_records)
+            selected_records.extend(selected_unclear_records)
+        for record in sorted(selected_records, key=lambda r: r.order):
+            if args.ref_per_species == 0 and species_key_from_taxonomy(record.taxonomy) is not None:
+                continue
+            write_record(record)
 
-    kept = eligible - skipped_species_cap
+    kept_clear = eligible_clear - skipped_species_cap
+    kept_unclear = eligible_unclear - skipped_unclear_genus_cap
+    kept = kept_clear + kept_unclear
     LOG.info("Reference preprocessing kept %s sequences", kept)
+    LOG.info("Kept clear species records: %s", kept_clear)
+    LOG.info("Kept unclear-species genus fallback records: %s", kept_unclear)
     LOG.info("Skipped by domain filter: %s", skipped_domain)
-    LOG.info("Skipped by unclear species name: %s", skipped_unclear_species)
+    LOG.info("Skipped unclear species without genus fallback: %s", skipped_unclear_species)
     LOG.info("Skipped by per-species cap: %s", skipped_species_cap)
+    LOG.info("Skipped by unclear-genus cap: %s", skipped_unclear_genus_cap)
     LOG.info("Skipped empty sequences: %s", skipped_empty)
     LOG.info("Skipped sequences containing non-ATGC characters: %s", skipped_non_atgc)
     make_blast_db(args.raw_ref_fa, args.raw_ref_db, args.makeblastdb_bin)

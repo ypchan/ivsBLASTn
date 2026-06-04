@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 import unittest
 
-from ivsblastn.fasta import read_fasta, species_key_from_taxonomy
+from ivsblastn.fasta import genus_key_from_taxonomy, read_fasta, species_key_from_taxonomy
 from ivsblastn.cli import init_reference_command, setup_reference_output_paths
 from ivsblastn.reference import preprocess_reference
 
@@ -20,6 +20,12 @@ class ReferenceSelectionTests(unittest.TestCase):
         self.assertIsNone(species_key_from_taxonomy("Bacteria;P;C;O;F;Vibrio;Vibrio sp001"))
         self.assertIsNone(species_key_from_taxonomy("Bacteria;P;C;O;F;Vibrio;Vibrio sp."))
         self.assertIsNone(species_key_from_taxonomy("Bacteria;P;C;O;F;Vibrio;Vibrio cf."))
+
+    def test_genus_key_uses_available_genus_for_unclear_species(self) -> None:
+        self.assertEqual(
+            genus_key_from_taxonomy("Bacteria;P;C;O;F;Vibrio;Vibrio sp001"),
+            "Bacteria;P;C;O;F;Vibrio",
+        )
 
     def test_read_fasta_rejects_duplicate_ids(self) -> None:
         with TemporaryDirectory() as tmpdir:
@@ -55,6 +61,7 @@ class ReferenceSelectionTests(unittest.TestCase):
                 ref_fasta=ref_fasta,
                 ref_domains="Archaea,Bacteria",
                 ref_per_species=1,
+                ref_unclear_per_genus=0,
                 raw_ref_fa=raw_ref_fa,
                 raw_ref_tax=raw_ref_tax,
                 raw_ref_db=raw_ref_db,
@@ -67,6 +74,46 @@ class ReferenceSelectionTests(unittest.TestCase):
             self.assertIn(">long", selected_fasta)
             self.assertNotIn(">short", selected_fasta)
             self.assertNotIn(">unclear", selected_fasta)
+
+    def test_preprocess_reference_keeps_unclear_species_by_genus_fallback(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            ref_fasta = tmp / "reference.fa"
+            raw_ref_fa = tmp / "raw_reference.fa"
+            raw_ref_tax = tmp / "raw_reference.tax.tsv"
+            raw_ref_db = tmp / "raw_reference_db"
+            ref_fasta.write_text(
+                "\n".join(
+                    [
+                        ">short_unclear Bacteria;P;C;O;F;Vibrio;Vibrio sp001",
+                        "ATGC",
+                        ">long_unclear Bacteria;P;C;O;F;Vibrio;Vibrio sp002",
+                        "ATGCATGC",
+                        ">other_genus Bacteria;P;C;O;F;Photobacterium;Photobacterium",
+                        "ATGCATGCATGC",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            args = SimpleNamespace(
+                ref_fasta=ref_fasta,
+                ref_domains="Archaea,Bacteria",
+                ref_per_species=1,
+                ref_unclear_per_genus=1,
+                raw_ref_fa=raw_ref_fa,
+                raw_ref_tax=raw_ref_tax,
+                raw_ref_db=raw_ref_db,
+                makeblastdb_bin="true",
+            )
+
+            preprocess_reference(args)
+
+            selected_fasta = raw_ref_fa.read_text(encoding="utf-8")
+            self.assertIn(">long_unclear", selected_fasta)
+            self.assertIn(">other_genus", selected_fasta)
+            self.assertNotIn(">short_unclear", selected_fasta)
 
     def test_init_reference_command_writes_reusable_manifest(self) -> None:
         with TemporaryDirectory() as tmpdir:
@@ -82,6 +129,7 @@ class ReferenceSelectionTests(unittest.TestCase):
                 outdir=outdir,
                 ref_domains="Archaea,Bacteria",
                 ref_per_species=1,
+                ref_unclear_per_genus=5,
                 clean_ref_introns=False,
                 min_intron_len=25,
                 max_intron_len=2000,
