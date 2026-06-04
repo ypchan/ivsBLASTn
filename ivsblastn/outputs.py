@@ -20,6 +20,16 @@ def summary_row(result: QueryResult, tax_rank: str) -> Dict[str, str]:
     return {
         "query_id": result.query_id,
         "query_len": str(result.query_len),
+        "blast_status": result.blast_status,
+        "blast_raw_hsps": str(result.blast_raw_hsps),
+        "blast_raw_subjects": str(result.blast_raw_subjects),
+        "blast_retained_hsps": str(result.blast_retained_hsps),
+        "blast_retained_subjects": str(result.blast_retained_subjects),
+        "blast_subjects_analyzed": str(result.blast_subjects_analyzed),
+        "best_blast_subject": result.best_blast_subject,
+        "best_blast_pident": f"{result.best_blast_pident:.2f}",
+        "best_blast_bitscore": f"{result.best_blast_bitscore:.2f}",
+        "best_blast_taxonomy": result.best_blast_taxonomy,
         "classification": result.classification,
         "confidence": result.confidence,
         "intron_start": str(result.intron_start) if result.intron_start else "",
@@ -74,6 +84,16 @@ def write_summary(path: Path, results: List[QueryResult], tax_rank: str) -> None
     fields = [
         "query_id",
         "query_len",
+        "blast_status",
+        "blast_raw_hsps",
+        "blast_raw_subjects",
+        "blast_retained_hsps",
+        "blast_retained_subjects",
+        "blast_subjects_analyzed",
+        "best_blast_subject",
+        "best_blast_pident",
+        "best_blast_bitscore",
+        "best_blast_taxonomy",
         "classification",
         "confidence",
         "intron_start",
@@ -175,6 +195,7 @@ def write_report(path: Path, results: List[QueryResult], args: argparse.Namespac
 
     counts = Counter(r.confidence for r in results)
     class_counts = Counter(r.classification for r in results)
+    blast_status_counts = Counter(r.blast_status for r in results)
     intron_lens = [r.intron_len for r in results if r.intron_len > 0]
     candidates = [r for r in results if r.intron_start and r.intron_end]
     output_candidates = [r for r in results if is_intron_result(r, args.min_output_confidence)]
@@ -240,6 +261,11 @@ def write_report(path: Path, results: List[QueryResult], args: argparse.Namespac
         print("", file=handle)
         for cls, count in class_counts.most_common():
             print(f"- `{cls}`: `{count}`", file=handle)
+        print("", file=handle)
+        print("## BLAST status counts", file=handle)
+        print("", file=handle)
+        for status, count in blast_status_counts.most_common():
+            print(f"- `{status}`: `{count}`", file=handle)
         if intron_lens:
             print("", file=handle)
             print("## Candidate intron length distribution", file=handle)
@@ -259,6 +285,7 @@ def print_summary(results: List[QueryResult], args: argparse.Namespace) -> None:
     """Print terminal summary."""
 
     counts = Counter(r.confidence for r in results)
+    blast_status_counts = Counter(r.blast_status for r in results)
     candidates = sum(1 for r in results if r.intron_start and r.intron_end)
     output_candidates = sum(1 for r in results if is_intron_result(r, args.min_output_confidence))
     table = Table(title="ivsBLASTn summary")
@@ -269,6 +296,8 @@ def print_summary(results: List[QueryResult], args: argparse.Namespace) -> None:
     table.add_row("Medium confidence", f"{counts.get('MEDIUM', 0):,}")
     table.add_row("Low confidence", f"{counts.get('LOW', 0):,}")
     table.add_row("No signal", f"{counts.get('NONE', 0):,}")
+    table.add_row("No BLAST hit", f"{blast_status_counts.get('NO_BLAST_HIT', 0):,}")
+    table.add_row("BLAST hit, no IVS pattern", f"{blast_status_counts.get('BLAST_HIT_NO_IVS_PATTERN', 0):,}")
     table.add_row("Candidate IVSs detected", f"{candidates:,}")
     table.add_row(f"IVSs written/removed (>= {args.min_output_confidence})", f"{output_candidates:,}")
     table.add_row("Summary TSV", str(args.summary_tsv))

@@ -613,6 +613,12 @@ Important columns:
 
 ```text
 query_id
+query_len
+blast_status
+blast_raw_subjects
+blast_retained_subjects
+blast_subjects_analyzed
+best_blast_subject
 classification
 confidence
 intron_start
@@ -625,6 +631,15 @@ median_pident
 best_subject
 best_subject_taxonomy
 reasons
+```
+
+For `NO_INTRON_SIGNAL`, first check `blast_status`:
+
+```text
+NO_BLAST_HIT              no BLASTN HSP was reported for the query
+BLAST_HITS_FILTERED       BLASTN reported HSPs, but all failed --min-pident or --min-hsp-len
+BLAST_HIT_NO_IVS_PATTERN  retained HSPs exist, but no subject supports an IVS-like split-HSP gap
+IVS_PATTERN_DETECTED      at least one IVS-like HSP-pair cluster was detected
 ```
 
 Confidence tiers:
@@ -790,6 +805,13 @@ The default `--tax-rank` is `genus`.
 | --- | --- |
 | `query_id` | Query FASTA ID |
 | `query_len` | Query sequence length |
+| `blast_status` | Whether BLAST produced usable HSPs and whether an IVS-like HSP geometry was detected |
+| `blast_raw_hsps`, `blast_raw_subjects` | BLAST outfmt rows and unique subjects before `--min-pident` / `--min-hsp-len` filtering |
+| `blast_retained_hsps`, `blast_retained_subjects` | HSPs and subjects retained after identity and length filtering |
+| `blast_subjects_analyzed` | Retained top subjects actually analyzed after `--top-subjects` |
+| `best_blast_subject` | Highest-scoring retained BLAST subject, independent of whether it supports IVS |
+| `best_blast_pident`, `best_blast_bitscore` | Percent identity of the best HSP and summed bitscore for `best_blast_subject` |
+| `best_blast_taxonomy` | Taxonomy for `best_blast_subject`, when available |
 | `classification` | Confidence class label |
 | `confidence` | `HIGH`, `MEDIUM`, `LOW`, or `NONE` |
 | `intron_start`, `intron_end`, `intron_len` | Query-relative 1-based closed IVS interval |

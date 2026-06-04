@@ -5,7 +5,7 @@ import heapq
 from statistics import median
 from typing import Dict, List, Optional, Tuple
 
-from .models import HSP, QueryResult, SupportPair
+from .models import BlastQueryStats, HSP, QueryResult, SupportPair
 from .taxonomy import get_taxon_at_rank
 
 def subject_gap_by_query_order(left: HSP, right: HSP) -> Optional[int]:
@@ -93,6 +93,59 @@ def top_subjects_by_bitscore(subject_hsps: Dict[str, List[HSP]], top_subjects: i
     return dict(item for _index, item in ranked)
 
 
+def blast_stats_from_retained_hsps(subject_hsps: Dict[str, List[HSP]]) -> BlastQueryStats:
+    """Build fallback BLAST stats when only retained HSPs are available."""
+
+    retained_hsps = sum(len(hsps) for hsps in subject_hsps.values())
+    retained_subjects = len(subject_hsps)
+    return BlastQueryStats(
+        raw_hsps=retained_hsps,
+        raw_subjects=retained_subjects,
+        retained_hsps=retained_hsps,
+        retained_subjects=retained_subjects,
+    )
+
+
+def best_blast_subject_fields(subject_hsps: Dict[str, List[HSP]], taxonomy: Dict[str, str]) -> Dict[str, object]:
+    """Return summary fields for the strongest retained BLAST subject."""
+
+    if not subject_hsps:
+        return {
+            "best_blast_subject": "",
+            "best_blast_pident": 0.0,
+            "best_blast_bitscore": 0.0,
+            "best_blast_taxonomy": "",
+        }
+    best_subject, best_hsps = max(
+        subject_hsps.items(),
+        key=lambda item: (sum(h.bitscore for h in item[1]), max(h.bitscore for h in item[1])),
+    )
+    best_hsp = max(best_hsps, key=lambda h: h.bitscore)
+    return {
+        "best_blast_subject": best_subject,
+        "best_blast_pident": best_hsp.pident,
+        "best_blast_bitscore": sum(h.bitscore for h in best_hsps),
+        "best_blast_taxonomy": taxonomy.get(best_subject, ""),
+    }
+
+
+def blast_result_fields(blast_status: str, stats: BlastQueryStats, top_subjects: Dict[str, List[HSP]], taxonomy: Dict[str, str]) -> Dict[str, object]:
+    """Return QueryResult BLAST summary fields."""
+
+    fields = best_blast_subject_fields(top_subjects, taxonomy)
+    fields.update(
+        {
+            "blast_status": blast_status,
+            "blast_raw_hsps": stats.raw_hsps,
+            "blast_raw_subjects": stats.raw_subjects,
+            "blast_retained_hsps": stats.retained_hsps,
+            "blast_retained_subjects": stats.retained_subjects,
+            "blast_subjects_analyzed": len(top_subjects),
+        }
+    )
+    return fields
+
+
 def cluster_support_pairs(pairs: List[SupportPair], breakpoint_window: int) -> List[List[SupportPair]]:
     """Cluster support pairs by similar query intron coordinates."""
 
@@ -134,9 +187,17 @@ def classify_confidence(support_subjects: int, support_taxa: int, args: argparse
     return "NO_INTRON_SIGNAL", "NONE", ["no_supported_intron_cluster"]
 
 
-def analyze_query(query_id: str, subject_hsps: Dict[str, List[HSP]], query_len: int, taxonomy: Dict[str, str], args: argparse.Namespace) -> QueryResult:
+def analyze_query(
+    query_id: str,
+    subject_hsps: Dict[str, List[HSP]],
+    query_len: int,
+    taxonomy: Dict[str, str],
+    args: argparse.Namespace,
+    blast_stats: Optional[BlastQueryStats] = None,
+) -> QueryResult:
     """Analyze one query sequence."""
 
+    stats = blast_stats or blast_stats_from_retained_hsps(subject_hsps)
     top_subjects = top_subjects_by_bitscore(subject_hsps, args.top_subjects)
     support_pairs: List[SupportPair] = []
     for subject_id, hsps in top_subjects.items():
@@ -144,7 +205,32 @@ def analyze_query(query_id: str, subject_hsps: Dict[str, List[HSP]], query_len: 
         if pair is not None:
             support_pairs.append(pair)
     if not support_pairs:
-        return QueryResult(query_id=query_id, query_len=query_len, classification="NO_INTRON_SIGNAL", confidence="NONE", reasons=["no_subject_supported_hsp_gap_pattern"])
+        if stats.raw_hsps == 0:
+            blast_status = "NO_BLAST_HIT"
+            reasons = ["no_blast_hsp_reported"]
+        elif stats.retained_hsps == 0:
+            blast_status = "BLAST_HITS_FILTERED"
+            reasons = ["blast_hsps_failed_filters", f"min_pident={args.min_pident}", f"min_hsp_len={args.min_hsp_len}"]
+        else:
+            blast_status = "BLAST_HIT_NO_IVS_PATTERN"
+            reasons = ["blast_hsps_present_but_no_supported_hsp_gap_pattern"]
+        reasons.extend(
+            [
+                f"blast_raw_hsps={stats.raw_hsps}",
+                f"blast_raw_subjects={stats.raw_subjects}",
+                f"blast_retained_hsps={stats.retained_hsps}",
+                f"blast_retained_subjects={stats.retained_subjects}",
+                f"blast_subjects_analyzed={len(top_subjects)}",
+            ]
+        )
+        return QueryResult(
+            query_id=query_id,
+            query_len=query_len,
+            classification="NO_INTRON_SIGNAL",
+            confidence="NONE",
+            reasons=reasons,
+            **blast_result_fields(blast_status, stats, top_subjects, taxonomy),
+        )
 
     clusters = cluster_support_pairs(support_pairs, args.breakpoint_window)
     clusters.sort(key=lambda c: (len(c), len({p.taxon_at_rank for p in c if p.taxon_at_rank != "NA"}), sum(p.pair_score for p in c)), reverse=True)
@@ -157,7 +243,7 @@ def analyze_query(query_id: str, subject_hsps: Dict[str, List[HSP]], query_len: 
     support_species = unique_taxa_at_rank(best_cluster, "species")
     support_genera = unique_taxa_at_rank(best_cluster, "genus")
     classification, confidence, reasons = classify_confidence(support_subjects, support_taxa, args)
-    reasons.extend([f"algorithm={args.algorithm}", f"support_subjects={support_subjects}", f"support_taxa_at_{args.tax_rank}={support_taxa}", f"breakpoint_window={args.breakpoint_window}bp"])
+    reasons.extend([f"algorithm={args.algorithm}", "blast_status=IVS_PATTERN_DETECTED", f"support_subjects={support_subjects}", f"support_taxa_at_{args.tax_rank}={support_taxa}", f"breakpoint_window={args.breakpoint_window}bp"])
     best_pair = sorted(best_cluster, key=lambda p: p.pair_score, reverse=True)[0]
     median_subject_gap = float(median([p.subject_gap for p in best_cluster]))
     median_pident = float(median([(p.hsp1.pident + p.hsp2.pident) / 2.0 for p in best_cluster]))
@@ -172,6 +258,7 @@ def analyze_query(query_id: str, subject_hsps: Dict[str, List[HSP]], query_len: 
         query_len=query_len,
         classification=classification,
         confidence=confidence,
+        **blast_result_fields("IVS_PATTERN_DETECTED", stats, top_subjects, taxonomy),
         intron_start=intron_start,
         intron_end=intron_end,
         intron_len=intron_len,

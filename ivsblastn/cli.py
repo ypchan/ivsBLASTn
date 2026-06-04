@@ -12,7 +12,7 @@ from rich_argparse import RichHelpFormatter
 
 from . import __version__
 from .algorithm import analyze_query, confidence_rank
-from .blast import parse_blast, run_query_blastn
+from .blast import parse_blast_with_stats, run_query_blastn
 from .fasta import read_fasta
 from .logging import CONSOLE, LOG, setup_logging
 from .merge import merge_chunk_outputs
@@ -373,14 +373,14 @@ def run_pipeline(args: argparse.Namespace) -> int:
         task = progress.add_task("Preparing BLAST HSPs", total=None)
         blast_path = args.blast if args.blast is not None else run_query_blastn(args)
         args.blast = blast_path
-        blast_by_query = parse_blast(blast_path, args.min_pident, args.min_hsp_len)
+        blast_by_query, blast_stats_by_query = parse_blast_with_stats(blast_path, args.min_pident, args.min_hsp_len)
         progress.update(task, completed=1, total=1)
 
         query_ids = list(seqs.keys())
         task = progress.add_task("Detecting IVSs", total=len(query_ids))
 
         def worker(query_id: str) -> QueryResult:
-            return analyze_query(query_id, blast_by_query.get(query_id, {}), len(seqs.get(query_id, "")), taxonomy, args)
+            return analyze_query(query_id, blast_by_query.get(query_id, {}), len(seqs.get(query_id, "")), taxonomy, args, blast_stats_by_query.get(query_id))
 
         results: List[QueryResult] = []
         if args.threads == 1:

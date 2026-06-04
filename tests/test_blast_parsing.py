@@ -4,7 +4,7 @@ import gzip
 import sys
 import unittest
 
-from ivsblastn.blast import parse_blast, run_external_command
+from ivsblastn.blast import parse_blast, parse_blast_with_stats, run_external_command
 
 
 class BlastParsingTests(unittest.TestCase):
@@ -22,6 +22,12 @@ class BlastParsingTests(unittest.TestCase):
             self.assertIn("s1", grouped["q1"])
             self.assertNotIn("s2", grouped["q1"])
             self.assertNotIn("s3", grouped["q1"])
+
+            _grouped, stats = parse_blast_with_stats(blast_path, min_pident=75.0, min_hsp_len=100)
+            self.assertEqual(stats["q1"].raw_hsps, 3)
+            self.assertEqual(stats["q1"].raw_subjects, 3)
+            self.assertEqual(stats["q1"].retained_hsps, 1)
+            self.assertEqual(stats["q1"].retained_subjects, 1)
 
     def test_external_command_failure_reports_stderr(self) -> None:
         cmd = [

@@ -47,6 +47,16 @@ class HSP:
         return self.qdir * self.sdir
 
 
+@dataclass
+class BlastQueryStats:
+    """Per-query BLAST row counts before and after HSP filtering."""
+
+    raw_hsps: int = 0
+    raw_subjects: int = 0
+    retained_hsps: int = 0
+    retained_subjects: int = 0
+
+
 @dataclass(frozen=True)
 class SupportPair:
     """Best intron-like HSP pair for one query-subject comparison."""
@@ -83,6 +93,16 @@ class QueryResult:
     query_len: int
     classification: str
     confidence: str
+    blast_status: str = "NO_BLAST_HIT"
+    blast_raw_hsps: int = 0
+    blast_raw_subjects: int = 0
+    blast_retained_hsps: int = 0
+    blast_retained_subjects: int = 0
+    blast_subjects_analyzed: int = 0
+    best_blast_subject: str = ""
+    best_blast_pident: float = 0.0
+    best_blast_bitscore: float = 0.0
+    best_blast_taxonomy: str = ""
     intron_start: int = 0
     intron_end: int = 0
     intron_len: int = 0

@@ -1,11 +1,12 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
+from unittest.mock import patch
 import unittest
 
 from ivsblastn.algorithm import is_intron_result
 from ivsblastn.models import QueryResult
-from ivsblastn.outputs import write_fasta_outputs, write_report
+from ivsblastn.outputs import print_summary, write_fasta_outputs, write_report, write_summary
 
 
 class OutputTests(unittest.TestCase):
@@ -115,6 +116,54 @@ class OutputTests(unittest.TestCase):
             self.assertIn("AAAGGGG", free_text)
             self.assertIn(">q1|intron|4-6|len=3|confidence=HIGH", intron_text)
             self.assertIn("CCC", intron_text)
+
+    def test_write_summary_includes_blast_diagnostic_columns(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            summary = Path(tmpdir) / "summary.tsv"
+            result = QueryResult(
+                query_id="q1",
+                query_len=2417,
+                classification="NO_INTRON_SIGNAL",
+                confidence="NONE",
+                blast_status="BLAST_HIT_NO_IVS_PATTERN",
+                blast_raw_hsps=5,
+                blast_raw_subjects=2,
+                blast_retained_hsps=3,
+                blast_retained_subjects=1,
+                blast_subjects_analyzed=1,
+                best_blast_subject="s1",
+                best_blast_pident=88.0,
+                best_blast_bitscore=900.0,
+                best_blast_taxonomy="Archaea;P;C;O;F;Genus;Genus species",
+                reasons=["blast_hsps_present_but_no_supported_hsp_gap_pattern"],
+            )
+
+            write_summary(summary, [result], "genus")
+
+            text = summary.read_text(encoding="utf-8")
+            self.assertIn("blast_status", text)
+            self.assertIn("BLAST_HIT_NO_IVS_PATTERN", text)
+            self.assertIn("best_blast_subject", text)
+
+    def test_print_summary_handles_blast_status_counts(self) -> None:
+        args = SimpleNamespace(
+            min_output_confidence="MEDIUM",
+            summary_tsv="summary.tsv",
+            intron_free_fa="intron_free.fa",
+            introns_fa="introns.fa",
+        )
+        result = QueryResult(
+            query_id="q1",
+            query_len=2417,
+            classification="NO_INTRON_SIGNAL",
+            confidence="NONE",
+            blast_status="NO_BLAST_HIT",
+        )
+
+        with patch("ivsblastn.outputs.CONSOLE.print") as print_mock:
+            print_summary([result], args)
+
+        self.assertTrue(print_mock.called)
 
 
 if __name__ == "__main__":

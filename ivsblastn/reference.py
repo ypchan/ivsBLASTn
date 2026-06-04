@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 
 from .algorithm import analyze_query, confidence_rank, is_intron_result
-from .blast import make_blast_db, parse_blast, run_blastn_to_file
+from .blast import make_blast_db, parse_blast_with_stats, run_blastn_to_file
 from .fasta import (
     clean_dna_sequence,
     genus_key_from_taxonomy,
@@ -155,10 +155,19 @@ def clean_reference_introns(args: argparse.Namespace, ref_fa: Path, tax_tsv: Pat
     )
     ref_seqs = read_fasta(ref_fa)
     ref_taxonomy = parse_taxonomy(tax_tsv)
-    ref_blast_by_query = parse_blast(self_blast, args.min_pident, args.min_hsp_len)
+    ref_blast_by_query, ref_blast_stats_by_query = parse_blast_with_stats(self_blast, args.min_pident, args.min_hsp_len)
     ref_results: List[QueryResult] = []
     for query_id in sorted(ref_seqs):
-        ref_results.append(analyze_query(query_id, ref_blast_by_query.get(query_id, {}), len(ref_seqs.get(query_id, "")), ref_taxonomy, args))
+        ref_results.append(
+            analyze_query(
+                query_id,
+                ref_blast_by_query.get(query_id, {}),
+                len(ref_seqs.get(query_id, "")),
+                ref_taxonomy,
+                args,
+                ref_blast_stats_by_query.get(query_id),
+            )
+        )
     ref_results.sort(key=lambda r: (confidence_rank(r.confidence), r.support_subjects, r.support_taxa, r.query_id), reverse=True)
     write_summary(output_path(args.ref_self_clean_prefix, ".summary.tsv"), ref_results, args.tax_rank)
     write_supporting_hsps(output_path(args.ref_self_clean_prefix, ".supporting_hsps.tsv"), ref_results)

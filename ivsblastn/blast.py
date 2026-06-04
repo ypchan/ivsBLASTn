@@ -5,11 +5,11 @@ import csv
 import subprocess
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, Iterator, List, Optional
+from typing import Dict, Iterator, List, Optional, Set, Tuple
 
 from .fasta import open_text_auto
 from .logging import LOG
-from .models import HSP
+from .models import BlastQueryStats, HSP
 
 
 def run_external_command(cmd: List[str], label: str) -> None:
@@ -113,10 +113,13 @@ def iter_blast_hsps(path: Path) -> Iterator[HSP]:
                 yield hsp
 
 
-def parse_blast(path: Path, min_pident: float, min_hsp_len: int) -> Dict[str, Dict[str, List[HSP]]]:
-    """Parse BLAST outfmt 6 and group retained HSPs by query and subject."""
+def parse_blast_with_stats(path: Path, min_pident: float, min_hsp_len: int) -> Tuple[Dict[str, Dict[str, List[HSP]]], Dict[str, BlastQueryStats]]:
+    """Parse BLAST outfmt 6 and return retained HSPs plus per-query row counts."""
 
     grouped: Dict[str, Dict[str, List[HSP]]] = defaultdict(lambda: defaultdict(list))
+    stats: Dict[str, BlastQueryStats] = defaultdict(BlastQueryStats)
+    raw_subjects: Dict[str, Set[str]] = defaultdict(set)
+    retained_subjects: Dict[str, Set[str]] = defaultdict(set)
     n_lines = 0
     n_kept = 0
     n_bad = 0
@@ -126,6 +129,9 @@ def parse_blast(path: Path, min_pident: float, min_hsp_len: int) -> Dict[str, Di
             if not parts or parts[0].startswith("#"):
                 continue
             n_lines += 1
+            if len(parts) >= 2:
+                stats[parts[0]].raw_hsps += 1
+                raw_subjects[parts[0]].add(parts[1])
             hsp = parse_blast_row(parts)
             if hsp is None:
                 n_bad += 1
@@ -133,6 +139,18 @@ def parse_blast(path: Path, min_pident: float, min_hsp_len: int) -> Dict[str, Di
             if hsp.pident < min_pident or hsp.length < min_hsp_len:
                 continue
             grouped[hsp.qseqid][hsp.sseqid].append(hsp)
+            stats[hsp.qseqid].retained_hsps += 1
+            retained_subjects[hsp.qseqid].add(hsp.sseqid)
             n_kept += 1
+    for query_id, query_stats in stats.items():
+        query_stats.raw_subjects = len(raw_subjects.get(query_id, set()))
+        query_stats.retained_subjects = len(retained_subjects.get(query_id, set()))
     LOG.info("Parsed BLAST HSPs: %s rows, %s kept after filters, %s malformed skipped", n_lines, n_kept, n_bad)
+    return grouped, dict(stats)
+
+
+def parse_blast(path: Path, min_pident: float, min_hsp_len: int) -> Dict[str, Dict[str, List[HSP]]]:
+    """Parse BLAST outfmt 6 and group retained HSPs by query and subject."""
+
+    grouped, _stats = parse_blast_with_stats(path, min_pident, min_hsp_len)
     return grouped
