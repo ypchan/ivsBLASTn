@@ -11,13 +11,8 @@ subject:  exon-left  nearly continuous exon-right
 
 In BLASTN output this appears as two HSPs on the query separated by a large query gap, while the subject-side coordinates remain adjacent or nearly adjacent.
 
-![ivsBLASTn system workflow](figures/detect_intron_workflow.png)
+![ivsBLASTn system workflow](figures/ivsBLASTn_workflow.png)
 
-Method diagrams
-
-![HSP-gap support geometry](figures/hsp_gap_support.png)
-![Confidence scoring model](figures/confidence_model.png)
-![Reference self-cleaning method](figures/reference_self_clean.png)
 
 ## Install
 
@@ -342,6 +337,21 @@ ivsBLASTn submit-slurm \
 
 Detection parameters such as `--min-pident`, `--min-hsp-len`, `--min-intron-len`, `--max-ref-gap`, confidence thresholds, `--blast-task`, and `--blast-evalue` can be passed directly to `submit-slurm`. They are forwarded to every `ivsBLASTn run` array task, so local and Slurm runs can use the same thresholds.
 
+Per-chunk run outputs are written directly under `--outdir` by default:
+
+```text
+batch01/
+  slurm/
+  query.000001/
+    blast/
+    results/
+  query.000002/
+    blast/
+    results/
+```
+
+Use `--chunk-runs-dir some/path` if you want per-chunk run outputs somewhere else.
+
 For commercial HPC platforms that require project accounting:
 
 ```bash
@@ -416,7 +426,7 @@ After all Slurm array tasks finish:
 
 ```bash
 ivsBLASTn merge \
-  --chunk-results-dir batch01/chunks \
+  --chunk-results-dir batch01 \
   --outdir batch01/final \
   --label all_16s
 ```
@@ -516,7 +526,7 @@ ivsBLASTn submit-slurm \
   --extra-run-args "--min-output-confidence LOW"
 
 ivsBLASTn merge \
-  --chunk-results-dir refclean/chunks \
+  --chunk-results-dir refclean \
   --outdir refclean/final \
   --label cleaned_reference
 
@@ -761,7 +771,7 @@ The default `--tax-rank` is `genus`.
 - Final IVS coordinates are query-relative, not reference-relative.
 - Intron-containing references may align without a split HSP and therefore provide no support; use reference self-cleaning and enough `--top-subjects` when this is expected.
 - Missing taxonomy reduces `support_taxa` and makes MEDIUM/HIGH confidence harder to reach.
-- Direct `ivsBLASTn merge` skips gzip FASTA chunk outputs; run chunks without `--gzip-fasta-output` when direct FASTA merging is needed.
+- Gzip FASTA outputs are merged by concatenating gzip streams; most standard tools read this correctly.
 
 ## Troubleshooting
 

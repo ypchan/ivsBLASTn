@@ -74,6 +74,7 @@ def render_slurm_array_script(
     *,
     chunks_dir: Path,
     outdir: Path,
+    chunk_runs_dir: Optional[Path],
     db: Path,
     taxonomy: Optional[Path],
     threads: int,
@@ -107,7 +108,8 @@ def render_slurm_array_script(
     array_spec = f"1-{chunk_count}{concurrency}"
     manifest_arg = shlex.quote(str(manifest.resolve()))
     outdir_abs = outdir.resolve()
-    outdir_arg = shlex.quote(str(outdir_abs))
+    chunk_runs_abs = (chunk_runs_dir or outdir).resolve()
+    chunk_runs_arg = shlex.quote(str(chunk_runs_abs))
     db_arg = shlex.quote(str(db.resolve()))
     header = render_sbatch_header(
         job_name="ivsBLASTn",
@@ -168,7 +170,7 @@ CHUNK_NAME=\"${{CHUNK_BASE%.gz}}\"
 CHUNK_NAME=\"${{CHUNK_NAME%.fasta}}\"
 CHUNK_NAME=\"${{CHUNK_NAME%.fa}}\"
 CHUNK_NAME=\"${{CHUNK_NAME%.fna}}\"
-CHUNK_OUTDIR={outdir_arg}/chunks/${{CHUNK_NAME}}
+CHUNK_OUTDIR={chunk_runs_arg}/${{CHUNK_NAME}}
 
 {rendered_command}\
 """

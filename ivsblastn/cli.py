@@ -210,6 +210,7 @@ def build_parser() -> argparse.ArgumentParser:
     submit_parser.add_argument("--db", required=True, type=Path, help="BLAST database prefix shared by all chunks.")
     submit_parser.add_argument("--taxonomy", default=None, type=Path, help="Optional taxonomy TSV shared by all chunks.")
     submit_parser.add_argument("--outdir", required=True, type=Path, help="Batch run output directory.")
+    submit_parser.add_argument("--chunk-runs-dir", default=None, type=Path, help="Directory for per-chunk run output directories. Default: OUTDIR.")
     submit_parser.add_argument("--threads", default=8, type=positive_int, help="Threads passed to each ivsBLASTn run. Default: 8.")
     submit_parser.add_argument("--top-subjects", default=100, type=positive_int, help="Subjects requested and analyzed per query. Default: 100.")
     submit_parser.add_argument("--blast-max-hsps", default=5, type=positive_int, help="HSPs requested per query-subject pair. Default: 5.")
@@ -252,7 +253,7 @@ def build_parser() -> argparse.ArgumentParser:
     submit_parser.set_defaults(func=submit_slurm_command)
 
     merge_parser = subparsers.add_parser("merge", help="Merge per-chunk ivsBLASTn outputs.", formatter_class=RichHelpFormatter)
-    merge_parser.add_argument("--chunk-results-dir", required=True, type=Path, help="Directory containing per-chunk output directories, usually OUTDIR/chunks.")
+    merge_parser.add_argument("--chunk-results-dir", required=True, type=Path, help="Directory containing per-chunk run output directories, usually the submit-slurm OUTDIR.")
     merge_parser.add_argument("--outdir", required=True, type=Path, help="Final merged output directory.")
     merge_parser.add_argument("--label", default="merged", help="Output file prefix. Default: merged.")
     add_common_logging_args(merge_parser)
@@ -446,6 +447,7 @@ def submit_slurm_command(args: argparse.Namespace) -> int:
     script = render_slurm_array_script(
         chunks_dir=args.chunks_dir,
         outdir=args.outdir,
+        chunk_runs_dir=args.chunk_runs_dir,
         db=args.db,
         taxonomy=args.taxonomy,
         threads=args.threads,
@@ -474,6 +476,7 @@ def submit_slurm_command(args: argparse.Namespace) -> int:
         (args.outdir / "slurm" / "job_id.txt").write_text(f"{job_id}\n", encoding="utf-8")
     else:
         CONSOLE.print(f"Slurm script written: {script_path}")
+        CONSOLE.print(f"Chunk run outputs: {args.chunk_runs_dir or args.outdir}")
         CONSOLE.print("Review it, then submit with:")
         CONSOLE.print(f"  sbatch {shlex.quote(str(script_path))}")
     return 0

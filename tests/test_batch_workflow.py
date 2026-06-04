@@ -37,6 +37,22 @@ class BatchWorkflowTests(unittest.TestCase):
             self.assertIn("q1\tNONE", merged)
             self.assertIn("q2\tNONE", merged)
 
+    def test_merge_excludes_output_directory_inside_chunk_root(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            chunk_results = tmp / "batch" / "query.000001" / "results"
+            chunk_results.mkdir(parents=True)
+            chunk_results.joinpath("query.000001.summary.tsv").write_text("query_id\tconfidence\nq1\tNONE\n", encoding="utf-8")
+            previous_final = tmp / "batch" / "final" / "results"
+            previous_final.mkdir(parents=True)
+            previous_final.joinpath("all.summary.tsv").write_text("query_id\tconfidence\nold\tHIGH\n", encoding="utf-8")
+
+            merge_chunk_outputs(tmp / "batch", tmp / "batch" / "final", label="all")
+            merged = (tmp / "batch" / "final" / "results" / "all.summary.tsv").read_text(encoding="utf-8")
+
+            self.assertIn("q1\tNONE", merged)
+            self.assertNotIn("old\tHIGH", merged)
+
     def test_merge_concatenates_gzip_fasta_outputs(self) -> None:
         with TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
@@ -64,6 +80,7 @@ class BatchWorkflowTests(unittest.TestCase):
             script = render_slurm_array_script(
                 chunks_dir=chunks,
                 outdir=tmp / "run",
+                chunk_runs_dir=None,
                 db=Path("ref_db"),
                 taxonomy=Path("ref.tax.tsv"),
                 threads=8,
@@ -86,6 +103,7 @@ class BatchWorkflowTests(unittest.TestCase):
             self.assertIn("--max-ref-gap 12", script)
             self.assertIn("--min-output-confidence MEDIUM", script)
             self.assertIn("awk -F '\\t'", script)
+            self.assertIn(f"CHUNK_OUTDIR={tmp / 'run'}/${{CHUNK_NAME}}", script)
 
     def test_slurm_script_supports_commercial_resource_directives(self) -> None:
         with TemporaryDirectory() as tmpdir:
@@ -97,6 +115,7 @@ class BatchWorkflowTests(unittest.TestCase):
             script = render_slurm_array_script(
                 chunks_dir=chunks,
                 outdir=tmp / "run",
+                chunk_runs_dir=tmp / "chunk_runs",
                 db=Path("ref_db"),
                 taxonomy=None,
                 threads=20,
@@ -129,6 +148,7 @@ class BatchWorkflowTests(unittest.TestCase):
             self.assertIn("#SBATCH --exclude=node001", script)
             self.assertIn("#SBATCH --mail-type=END", script)
             self.assertIn("#SBATCH --comment=ivsBLASTn", script)
+            self.assertIn(f"CHUNK_OUTDIR={tmp / 'chunk_runs'}/${{CHUNK_NAME}}", script)
 
 
 if __name__ == "__main__":

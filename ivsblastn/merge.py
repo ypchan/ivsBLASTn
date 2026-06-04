@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Iterable, List
+from typing import Iterable, List, Optional
 
 from .logging import LOG
 
@@ -18,10 +18,18 @@ MERGE_SUFFIXES = [
 ]
 
 
-def sorted_chunk_result_dirs(chunk_results_dir: Path) -> List[Path]:
+def sorted_chunk_result_dirs(chunk_results_dir: Path, exclude: Optional[Path] = None) -> List[Path]:
     """Return chunk result directories in stable lexical order."""
 
-    return sorted(path for path in chunk_results_dir.iterdir() if path.is_dir())
+    excluded = exclude.resolve() if exclude is not None else None
+    chunk_dirs: List[Path] = []
+    for path in chunk_results_dir.iterdir():
+        if not path.is_dir():
+            continue
+        if excluded is not None and path.resolve() == excluded:
+            continue
+        chunk_dirs.append(path)
+    return sorted(chunk_dirs)
 
 
 def iter_files_by_suffix(chunk_dirs: Iterable[Path], suffix: str) -> Iterable[Path]:
@@ -71,7 +79,7 @@ def concatenate_binary_files(files: Iterable[Path], output: Path) -> int:
 def merge_chunk_outputs(chunk_results_dir: Path, outdir: Path, label: str = "merged") -> List[Path]:
     """Merge standard ivsBLASTn per-chunk outputs into a final output directory."""
 
-    chunk_dirs = sorted_chunk_result_dirs(chunk_results_dir)
+    chunk_dirs = sorted_chunk_result_dirs(chunk_results_dir, exclude=outdir)
     final_results = outdir / "results"
     final_results.mkdir(parents=True, exist_ok=True)
     outputs: List[Path] = []
