@@ -27,6 +27,19 @@ from .taxonomy import parse_taxonomy
 
 SUBCOMMANDS = {"run", "init-reference", "split", "submit-slurm", "merge"}
 BLAST_DB_EXTENSIONS = (".nhr", ".nin", ".nsq", ".nal", ".ndb", ".njs", ".nog", ".nos", ".not", ".ntf", ".nto")
+DEFAULT_REF_CLEAN_MIN_CONFIDENCE = "MEDIUM"
+DEFAULT_MIN_PIDENT = 80.0
+DEFAULT_MIN_HSP_LEN = 100
+DEFAULT_TOP_SUBJECTS = 100
+DEFAULT_REF_SELF_BLAST_MAX_TARGET_SEQS = 100
+DEFAULT_REF_SELF_BLAST_MAX_HSPS = 20
+DEFAULT_BLAST_MAX_HSPS = 5
+DEFAULT_MIN_INTRON_LEN = 25
+DEFAULT_MAX_INTRON_LEN = 2000
+DEFAULT_MAX_REF_GAP = 15
+DEFAULT_MAX_QUERY_OVERLAP = 20
+DEFAULT_BREAKPOINT_WINDOW = 20
+DEFAULT_MIN_OUTPUT_CONFIDENCE = "MEDIUM"
 
 
 def positive_int(value: str) -> int:
@@ -111,24 +124,24 @@ def add_run_args(parser: argparse.ArgumentParser) -> None:
     filters.add_argument("--ref-per-species", default=1, type=nonnegative_int, help="Maximum sequences per clear species in reference preprocessing, keeping the longest sequences first. Use 0 to disable. Default: 1.")
     filters.add_argument("--ref-unclear-per-genus", default=5, type=nonnegative_int, help="Maximum unclear-species records retained per genus, keeping the longest sequences first. Use 0 to skip all unclear species. Default: 5.")
     filters.add_argument("--clean-ref-introns", action="store_true", help="Self-BLAST reference and remove candidate introns before query BLAST. Default: disabled.")
-    filters.add_argument("--ref-clean-min-confidence", default="LOW", choices=["LOW", "MEDIUM", "HIGH"], help="Minimum confidence required to remove a reference intron. Default: LOW.")
-    filters.add_argument("--ref-self-blast-max-target-seqs", default=100, type=positive_int, help="Reference self-BLAST -max_target_seqs. Default: 100.")
-    filters.add_argument("--ref-self-blast-max-hsps", default=20, type=positive_int, help="Reference self-BLAST -max_hsps. Default: 20.")
-    filters.add_argument("--min-pident", default=75.0, type=probability_percent, help="Minimum HSP percent identity. Default: 75.0.")
-    filters.add_argument("--min-hsp-len", default=100, type=positive_int, help="Minimum HSP length in bp. Default: 100.")
-    filters.add_argument("--top-subjects", default=100, type=positive_int, help="Subjects requested from query BLASTN and retained per query after parsing. Default: 100.")
+    filters.add_argument("--ref-clean-min-confidence", default=DEFAULT_REF_CLEAN_MIN_CONFIDENCE, choices=["LOW", "MEDIUM", "HIGH"], help=f"Minimum confidence required to remove a reference intron. Default: {DEFAULT_REF_CLEAN_MIN_CONFIDENCE}.")
+    filters.add_argument("--ref-self-blast-max-target-seqs", default=DEFAULT_REF_SELF_BLAST_MAX_TARGET_SEQS, type=positive_int, help=f"Reference self-BLAST -max_target_seqs. Default: {DEFAULT_REF_SELF_BLAST_MAX_TARGET_SEQS}.")
+    filters.add_argument("--ref-self-blast-max-hsps", default=DEFAULT_REF_SELF_BLAST_MAX_HSPS, type=positive_int, help=f"Reference self-BLAST -max_hsps. Default: {DEFAULT_REF_SELF_BLAST_MAX_HSPS}.")
+    filters.add_argument("--min-pident", default=DEFAULT_MIN_PIDENT, type=probability_percent, help=f"Minimum HSP percent identity. Default: {DEFAULT_MIN_PIDENT}.")
+    filters.add_argument("--min-hsp-len", default=DEFAULT_MIN_HSP_LEN, type=positive_int, help=f"Minimum HSP length in bp. Default: {DEFAULT_MIN_HSP_LEN}.")
+    filters.add_argument("--top-subjects", default=DEFAULT_TOP_SUBJECTS, type=positive_int, help=f"Subjects requested from query BLASTN and retained per query after parsing. Default: {DEFAULT_TOP_SUBJECTS}.")
     filters.add_argument("--makeblastdb-bin", default="makeblastdb", help="makeblastdb executable. Default: makeblastdb.")
     filters.add_argument("--blastn-bin", default="blastn", help="blastn executable. Default: blastn.")
-    filters.add_argument("--blast-max-hsps", default=5, type=positive_int, help="Query BLASTN -max_hsps per subject. Default: 5.")
+    filters.add_argument("--blast-max-hsps", default=DEFAULT_BLAST_MAX_HSPS, type=positive_int, help=f"Query BLASTN -max_hsps per subject. Default: {DEFAULT_BLAST_MAX_HSPS}.")
     filters.add_argument("--blast-task", default="blastn", choices=["blastn", "megablast", "dc-megablast", "blastn-short"], help="BLASTN task. Default: blastn.")
     filters.add_argument("--blast-evalue", default="1e-20", help="BLASTN e-value. Default: 1e-20.")
 
     intron = parser.add_argument_group("Candidate IVS geometry")
-    intron.add_argument("--min-intron-len", default=25, type=nonnegative_int, help="Minimum query gap size. Default: 25 bp.")
-    intron.add_argument("--max-intron-len", default=2000, type=positive_int, help="Maximum query gap size. Default: 2000 bp.")
-    intron.add_argument("--max-ref-gap", default=30, type=nonnegative_int, help="Maximum absolute reference gap/overlap. Default: 30 bp.")
-    intron.add_argument("--max-query-overlap", default=20, type=nonnegative_int, help="Maximum allowed query HSP overlap. Default: 20 bp.")
-    intron.add_argument("--breakpoint-window", default=30, type=nonnegative_int, help="Breakpoint clustering window. Default: 30 bp.")
+    intron.add_argument("--min-intron-len", default=DEFAULT_MIN_INTRON_LEN, type=nonnegative_int, help=f"Minimum query gap size. Default: {DEFAULT_MIN_INTRON_LEN} bp.")
+    intron.add_argument("--max-intron-len", default=DEFAULT_MAX_INTRON_LEN, type=positive_int, help=f"Maximum query gap size. Default: {DEFAULT_MAX_INTRON_LEN} bp.")
+    intron.add_argument("--max-ref-gap", default=DEFAULT_MAX_REF_GAP, type=nonnegative_int, help=f"Maximum absolute reference gap/overlap. Default: {DEFAULT_MAX_REF_GAP} bp.")
+    intron.add_argument("--max-query-overlap", default=DEFAULT_MAX_QUERY_OVERLAP, type=nonnegative_int, help=f"Maximum allowed query HSP overlap. Default: {DEFAULT_MAX_QUERY_OVERLAP} bp.")
+    intron.add_argument("--breakpoint-window", default=DEFAULT_BREAKPOINT_WINDOW, type=nonnegative_int, help=f"Breakpoint clustering window. Default: {DEFAULT_BREAKPOINT_WINDOW} bp.")
 
     taxonomy = parser.add_argument_group("Taxonomy support")
     taxonomy.add_argument("--taxonomy", default=None, type=Path, help="Optional subject taxonomy TSV. If --ref-fasta is used, generated automatically.")
@@ -140,7 +153,7 @@ def add_run_args(parser: argparse.ArgumentParser) -> None:
     confidence.add_argument("--medium-support-taxa", default=3, type=positive_int, help="Minimum taxa for MEDIUM confidence. Default: 3.")
     confidence.add_argument("--high-support-subjects", default=10, type=positive_int, help="Minimum subjects for HIGH confidence. Default: 10.")
     confidence.add_argument("--high-support-taxa", default=3, type=positive_int, help="Minimum taxa for HIGH confidence. Default: 3.")
-    confidence.add_argument("--min-output-confidence", default="LOW", choices=["LOW", "MEDIUM", "HIGH"], help="Minimum confidence removed in intron-free FASTA and written to intron FASTA/BED outputs. Default: LOW.")
+    confidence.add_argument("--min-output-confidence", default=DEFAULT_MIN_OUTPUT_CONFIDENCE, choices=["LOW", "MEDIUM", "HIGH"], help=f"Minimum confidence removed in intron-free FASTA and written to intron FASTA/BED outputs. Default: {DEFAULT_MIN_OUTPUT_CONFIDENCE}.")
     confidence.add_argument("--gzip-fasta-output", action="store_true", help="Write intron-free and intron FASTA outputs as .fa.gz. Default: disabled.")
 
     runtime = parser.add_argument_group("Runtime")
@@ -175,21 +188,21 @@ def build_parser() -> argparse.ArgumentParser:
 
     init_self_clean = init_ref_parser.add_argument_group("Optional reference self-cleaning")
     init_self_clean.add_argument("--clean-ref-introns", action="store_true", help="Self-BLAST reference and remove candidate IVSs before final DB creation.")
-    init_self_clean.add_argument("--ref-clean-min-confidence", default="LOW", choices=["LOW", "MEDIUM", "HIGH"], help="Minimum confidence required to remove a reference IVS. Default: LOW.")
-    init_self_clean.add_argument("--ref-self-blast-max-target-seqs", default=100, type=positive_int, help="Reference self-BLAST -max_target_seqs. Default: 100.")
-    init_self_clean.add_argument("--ref-self-blast-max-hsps", default=20, type=positive_int, help="Reference self-BLAST -max_hsps. Default: 20.")
-    init_self_clean.add_argument("--min-pident", default=75.0, type=probability_percent, help="Minimum HSP percent identity for optional self-cleaning. Default: 75.0.")
-    init_self_clean.add_argument("--min-hsp-len", default=100, type=positive_int, help="Minimum HSP length for optional self-cleaning. Default: 100.")
-    init_self_clean.add_argument("--top-subjects", default=100, type=positive_int, help="Top subjects retained per reference during optional self-cleaning. Default: 100.")
+    init_self_clean.add_argument("--ref-clean-min-confidence", default=DEFAULT_REF_CLEAN_MIN_CONFIDENCE, choices=["LOW", "MEDIUM", "HIGH"], help=f"Minimum confidence required to remove a reference IVS. Default: {DEFAULT_REF_CLEAN_MIN_CONFIDENCE}.")
+    init_self_clean.add_argument("--ref-self-blast-max-target-seqs", default=DEFAULT_REF_SELF_BLAST_MAX_TARGET_SEQS, type=positive_int, help=f"Reference self-BLAST -max_target_seqs. Default: {DEFAULT_REF_SELF_BLAST_MAX_TARGET_SEQS}.")
+    init_self_clean.add_argument("--ref-self-blast-max-hsps", default=DEFAULT_REF_SELF_BLAST_MAX_HSPS, type=positive_int, help=f"Reference self-BLAST -max_hsps. Default: {DEFAULT_REF_SELF_BLAST_MAX_HSPS}.")
+    init_self_clean.add_argument("--min-pident", default=DEFAULT_MIN_PIDENT, type=probability_percent, help=f"Minimum HSP percent identity for optional self-cleaning. Default: {DEFAULT_MIN_PIDENT}.")
+    init_self_clean.add_argument("--min-hsp-len", default=DEFAULT_MIN_HSP_LEN, type=positive_int, help=f"Minimum HSP length for optional self-cleaning. Default: {DEFAULT_MIN_HSP_LEN}.")
+    init_self_clean.add_argument("--top-subjects", default=DEFAULT_TOP_SUBJECTS, type=positive_int, help=f"Top subjects retained per reference during optional self-cleaning. Default: {DEFAULT_TOP_SUBJECTS}.")
     init_self_clean.add_argument("--algorithm", default="hsp-gap-support", choices=["hsp-gap-support"], help="Detection algorithm for optional self-cleaning. Default: hsp-gap-support.")
     init_self_clean.add_argument("--tax-rank", default="genus", choices=["domain", "phylum", "class", "order", "family", "genus", "species"], help="Taxonomic rank used during optional self-cleaning. Default: genus.")
 
     init_geometry = init_ref_parser.add_argument_group("Self-cleaning IVS geometry")
-    init_geometry.add_argument("--min-intron-len", default=25, type=nonnegative_int, help="Minimum query gap size for optional self-cleaning. Default: 25 bp.")
-    init_geometry.add_argument("--max-intron-len", default=2000, type=positive_int, help="Maximum query gap size for optional self-cleaning. Default: 2000 bp.")
-    init_geometry.add_argument("--max-ref-gap", default=30, type=nonnegative_int, help="Maximum absolute reference gap/overlap for optional self-cleaning. Default: 30 bp.")
-    init_geometry.add_argument("--max-query-overlap", default=20, type=nonnegative_int, help="Maximum allowed query HSP overlap. Default: 20 bp.")
-    init_geometry.add_argument("--breakpoint-window", default=30, type=nonnegative_int, help="Breakpoint clustering window. Default: 30 bp.")
+    init_geometry.add_argument("--min-intron-len", default=DEFAULT_MIN_INTRON_LEN, type=nonnegative_int, help=f"Minimum query gap size for optional self-cleaning. Default: {DEFAULT_MIN_INTRON_LEN} bp.")
+    init_geometry.add_argument("--max-intron-len", default=DEFAULT_MAX_INTRON_LEN, type=positive_int, help=f"Maximum query gap size for optional self-cleaning. Default: {DEFAULT_MAX_INTRON_LEN} bp.")
+    init_geometry.add_argument("--max-ref-gap", default=DEFAULT_MAX_REF_GAP, type=nonnegative_int, help=f"Maximum absolute reference gap/overlap for optional self-cleaning. Default: {DEFAULT_MAX_REF_GAP} bp.")
+    init_geometry.add_argument("--max-query-overlap", default=DEFAULT_MAX_QUERY_OVERLAP, type=nonnegative_int, help=f"Maximum allowed query HSP overlap. Default: {DEFAULT_MAX_QUERY_OVERLAP} bp.")
+    init_geometry.add_argument("--breakpoint-window", default=DEFAULT_BREAKPOINT_WINDOW, type=nonnegative_int, help=f"Breakpoint clustering window. Default: {DEFAULT_BREAKPOINT_WINDOW} bp.")
 
     init_confidence = init_ref_parser.add_argument_group("Self-cleaning confidence thresholds")
     init_confidence.add_argument("--min-support-subjects", default=1, type=positive_int, help="Minimum subjects for LOW confidence. Default: 1.")
@@ -197,7 +210,7 @@ def build_parser() -> argparse.ArgumentParser:
     init_confidence.add_argument("--medium-support-taxa", default=3, type=positive_int, help="Minimum taxa for MEDIUM confidence. Default: 3.")
     init_confidence.add_argument("--high-support-subjects", default=10, type=positive_int, help="Minimum subjects for HIGH confidence. Default: 10.")
     init_confidence.add_argument("--high-support-taxa", default=3, type=positive_int, help="Minimum taxa for HIGH confidence. Default: 3.")
-    init_confidence.add_argument("--min-output-confidence", default="LOW", choices=["LOW", "MEDIUM", "HIGH"], help=argparse.SUPPRESS)
+    init_confidence.add_argument("--min-output-confidence", default=DEFAULT_MIN_OUTPUT_CONFIDENCE, choices=["LOW", "MEDIUM", "HIGH"], help=argparse.SUPPRESS)
 
     init_runtime = init_ref_parser.add_argument_group("Runtime and external tools")
     init_runtime.add_argument("--threads", default=4, type=positive_int, help="Worker and BLASTN threads for optional self-cleaning. Default: 4.")
@@ -228,16 +241,16 @@ def build_parser() -> argparse.ArgumentParser:
 
     submit_detection = submit_parser.add_argument_group("Detection parameters forwarded to each chunk")
     submit_detection.add_argument("--threads", default=8, type=positive_int, help="Threads passed to each ivsBLASTn run. Default: 8.")
-    submit_detection.add_argument("--top-subjects", default=100, type=positive_int, help="Subjects requested and analyzed per query. Default: 100.")
-    submit_detection.add_argument("--blast-max-hsps", default=5, type=positive_int, help="HSPs requested per query-subject pair. Default: 5.")
+    submit_detection.add_argument("--top-subjects", default=DEFAULT_TOP_SUBJECTS, type=positive_int, help=f"Subjects requested and analyzed per query. Default: {DEFAULT_TOP_SUBJECTS}.")
+    submit_detection.add_argument("--blast-max-hsps", default=DEFAULT_BLAST_MAX_HSPS, type=positive_int, help=f"HSPs requested per query-subject pair. Default: {DEFAULT_BLAST_MAX_HSPS}.")
     submit_detection.add_argument("--algorithm", default="hsp-gap-support", choices=["hsp-gap-support"], help="Detection algorithm forwarded to each run. Default: hsp-gap-support.")
-    submit_detection.add_argument("--min-pident", default=75.0, type=probability_percent, help="Minimum HSP percent identity forwarded to each run. Default: 75.0.")
-    submit_detection.add_argument("--min-hsp-len", default=100, type=positive_int, help="Minimum HSP length forwarded to each run. Default: 100.")
-    submit_detection.add_argument("--min-intron-len", default=25, type=nonnegative_int, help="Minimum query gap size forwarded to each run. Default: 25 bp.")
-    submit_detection.add_argument("--max-intron-len", default=2000, type=positive_int, help="Maximum query gap size forwarded to each run. Default: 2000 bp.")
-    submit_detection.add_argument("--max-ref-gap", default=30, type=nonnegative_int, help="Maximum absolute reference gap/overlap forwarded to each run. Default: 30 bp.")
-    submit_detection.add_argument("--max-query-overlap", default=20, type=nonnegative_int, help="Maximum allowed query HSP overlap forwarded to each run. Default: 20 bp.")
-    submit_detection.add_argument("--breakpoint-window", default=30, type=nonnegative_int, help="Breakpoint clustering window forwarded to each run. Default: 30 bp.")
+    submit_detection.add_argument("--min-pident", default=DEFAULT_MIN_PIDENT, type=probability_percent, help=f"Minimum HSP percent identity forwarded to each run. Default: {DEFAULT_MIN_PIDENT}.")
+    submit_detection.add_argument("--min-hsp-len", default=DEFAULT_MIN_HSP_LEN, type=positive_int, help=f"Minimum HSP length forwarded to each run. Default: {DEFAULT_MIN_HSP_LEN}.")
+    submit_detection.add_argument("--min-intron-len", default=DEFAULT_MIN_INTRON_LEN, type=nonnegative_int, help=f"Minimum query gap size forwarded to each run. Default: {DEFAULT_MIN_INTRON_LEN} bp.")
+    submit_detection.add_argument("--max-intron-len", default=DEFAULT_MAX_INTRON_LEN, type=positive_int, help=f"Maximum query gap size forwarded to each run. Default: {DEFAULT_MAX_INTRON_LEN} bp.")
+    submit_detection.add_argument("--max-ref-gap", default=DEFAULT_MAX_REF_GAP, type=nonnegative_int, help=f"Maximum absolute reference gap/overlap forwarded to each run. Default: {DEFAULT_MAX_REF_GAP} bp.")
+    submit_detection.add_argument("--max-query-overlap", default=DEFAULT_MAX_QUERY_OVERLAP, type=nonnegative_int, help=f"Maximum allowed query HSP overlap forwarded to each run. Default: {DEFAULT_MAX_QUERY_OVERLAP} bp.")
+    submit_detection.add_argument("--breakpoint-window", default=DEFAULT_BREAKPOINT_WINDOW, type=nonnegative_int, help=f"Breakpoint clustering window forwarded to each run. Default: {DEFAULT_BREAKPOINT_WINDOW} bp.")
     submit_detection.add_argument("--blastn-bin", default="blastn", help="blastn executable forwarded to each run. Default: blastn.")
     submit_detection.add_argument("--blast-task", default="blastn", choices=["blastn", "megablast", "dc-megablast", "blastn-short"], help="BLASTN task forwarded to each run. Default: blastn.")
     submit_detection.add_argument("--blast-evalue", default="1e-20", help="BLASTN e-value forwarded to each run. Default: 1e-20.")
@@ -247,7 +260,7 @@ def build_parser() -> argparse.ArgumentParser:
     submit_detection.add_argument("--medium-support-taxa", default=3, type=positive_int, help="Minimum taxa for MEDIUM confidence forwarded to each run. Default: 3.")
     submit_detection.add_argument("--high-support-subjects", default=10, type=positive_int, help="Minimum subjects for HIGH confidence forwarded to each run. Default: 10.")
     submit_detection.add_argument("--high-support-taxa", default=3, type=positive_int, help="Minimum taxa for HIGH confidence forwarded to each run. Default: 3.")
-    submit_detection.add_argument("--min-output-confidence", default="LOW", choices=["LOW", "MEDIUM", "HIGH"], help="Minimum confidence for FASTA/BED outputs forwarded to each run. Default: LOW.")
+    submit_detection.add_argument("--min-output-confidence", default=DEFAULT_MIN_OUTPUT_CONFIDENCE, choices=["LOW", "MEDIUM", "HIGH"], help=f"Minimum confidence for FASTA/BED outputs forwarded to each run. Default: {DEFAULT_MIN_OUTPUT_CONFIDENCE}.")
     submit_detection.add_argument("--gzip-fasta-output", action="store_true", help="Write per-chunk FASTA outputs as .fa.gz and merge them as gzip streams. Default: disabled.")
 
     submit_slurm = submit_parser.add_argument_group("Slurm resources and platform directives")
@@ -423,7 +436,7 @@ def setup_reference_output_paths(args: argparse.Namespace) -> None:
     args.db = None
     args.taxonomy = None
     args.blast_max_hsps = getattr(args, "ref_self_blast_max_hsps", 20)
-    args.min_output_confidence = getattr(args, "ref_clean_min_confidence", "LOW")
+    args.min_output_confidence = getattr(args, "ref_clean_min_confidence", DEFAULT_REF_CLEAN_MIN_CONFIDENCE)
 
 
 def init_reference_command(args: argparse.Namespace) -> int:

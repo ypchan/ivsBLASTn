@@ -237,11 +237,14 @@ For 16S/SSU IVS screening, these are usually the most important:
 ```bash
 --top-subjects 100
 --blast-max-hsps 5
---min-pident 75
+--min-pident 80
 --min-hsp-len 100
 --min-intron-len 25
 --max-intron-len 2000
---max-ref-gap 30
+--max-ref-gap 15
+--breakpoint-window 20
+--min-output-confidence MEDIUM
+--ref-clean-min-confidence MEDIUM
 ```
 
 Query BLASTN uses:
@@ -258,6 +261,10 @@ So the maximum reported HSP count per query is bounded by:
 ```
 
 For IVS detection in 16S rRNA genes, IVSs are expected to be sparse, so the default `--blast-max-hsps 5` keeps BLAST output smaller than the earlier conservative value of 20.
+
+The default thresholds are publication-oriented rather than discovery-only. LOW-confidence candidates remain visible in `*.summary.tsv` and `*.supporting_hsps.tsv` for manual review, but sequence-changing outputs (`*.intron_free.fa`, `*.introns.fa`, and BED files) use `--min-output-confidence MEDIUM` by default. Reference self-cleaning also uses `--ref-clean-min-confidence MEDIUM` by default to avoid removing reference sequence from a single-subject signal. For exploratory screening, lower these explicitly, for example `--min-output-confidence LOW`.
+
+For manuscripts, report the exact command line plus the confidence tier used for sequence editing. A conservative wording is that MEDIUM/HIGH IVSs were used for downstream corrected sequences, while LOW calls were retained as candidate signals requiring manual inspection.
 
 ## Single-Node Run
 
@@ -553,7 +560,7 @@ ivsBLASTn submit-slurm \
   --mem 16G \
   --time 12:00:00 \
   --array-concurrency 40 \
-  --extra-run-args "--min-output-confidence LOW"
+  --extra-run-args "--min-output-confidence MEDIUM"
 
 ivsBLASTn merge \
   --chunk-results-dir refclean \
@@ -644,6 +651,8 @@ Output FASTA files:
 *.intron_free.fa   all query sequences; IVS removed only for candidates passing --min-output-confidence
 *.introns.fa       candidate IVS sequences passing --min-output-confidence
 ```
+
+The default `--min-output-confidence` is `MEDIUM`. LOW-confidence rows are candidate signals for inspection, not default sequence edits.
 
 BED files:
 

@@ -39,6 +39,7 @@ class CliDefaultTests(unittest.TestCase):
 
         self.assertEqual(args.ref_per_species, 1)
         self.assertEqual(args.ref_unclear_per_genus, 5)
+        self.assertEqual(args.ref_clean_min_confidence, "MEDIUM")
         self.assertFalse(args.clean_ref_introns)
 
     def test_submit_slurm_forwards_detection_defaults(self) -> None:
@@ -54,10 +55,11 @@ class CliDefaultTests(unittest.TestCase):
             ]
         )
 
-        self.assertEqual(args.min_pident, 75.0)
+        self.assertEqual(args.min_pident, 80.0)
         self.assertEqual(args.min_hsp_len, 100)
-        self.assertEqual(args.max_ref_gap, 30)
-        self.assertEqual(args.min_output_confidence, "LOW")
+        self.assertEqual(args.max_ref_gap, 15)
+        self.assertEqual(args.breakpoint_window, 20)
+        self.assertEqual(args.min_output_confidence, "MEDIUM")
         self.assertFalse(args.gzip_fasta_output)
 
 
