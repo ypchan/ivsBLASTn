@@ -9,6 +9,67 @@ from typing import List, Optional, Sequence
 from .logging import LOG
 
 
+def render_sbatch_header(
+    *,
+    job_name: str,
+    cpus_per_task: int,
+    mem: str,
+    time: str,
+    output: Path,
+    error: Path,
+    array: str,
+    partition: Optional[str] = None,
+    account: Optional[str] = None,
+    qos: Optional[str] = None,
+    nodes: Optional[int] = None,
+    ntasks: Optional[int] = None,
+    constraint: Optional[str] = None,
+    gres: Optional[str] = None,
+    exclude: Optional[str] = None,
+    nodelist: Optional[str] = None,
+    extra_sbatch_options: Optional[Sequence[str]] = None,
+) -> str:
+    """Render SBATCH resource directives."""
+
+    lines = [
+        "#!/usr/bin/env bash",
+        f"#SBATCH --job-name={job_name}",
+        f"#SBATCH --cpus-per-task={cpus_per_task}",
+        f"#SBATCH --mem={mem}",
+        f"#SBATCH --time={time}",
+    ]
+    optional_options = [
+        ("partition", partition),
+        ("account", account),
+        ("qos", qos),
+        ("nodes", nodes),
+        ("ntasks", ntasks),
+        ("constraint", constraint),
+        ("gres", gres),
+        ("exclude", exclude),
+        ("nodelist", nodelist),
+    ]
+    for name, value in optional_options:
+        if value is not None:
+            lines.append(f"#SBATCH --{name}={value}")
+    lines.extend(
+        [
+            f"#SBATCH --output={output}",
+            f"#SBATCH --error={error}",
+            f"#SBATCH --array={array}",
+        ]
+    )
+    for option in extra_sbatch_options or []:
+        stripped = option.strip()
+        if not stripped:
+            continue
+        if stripped.startswith("#SBATCH"):
+            lines.append(stripped)
+        else:
+            lines.append(f"#SBATCH {stripped}")
+    return "\n".join(lines)
+
+
 def render_slurm_array_script(
     *,
     chunks_dir: Path,
@@ -22,8 +83,17 @@ def render_slurm_array_script(
     mem: str,
     time: str,
     partition: Optional[str],
-    array_concurrency: Optional[int],
-    extra_run_args: str,
+    account: Optional[str] = None,
+    qos: Optional[str] = None,
+    nodes: Optional[int] = None,
+    ntasks: Optional[int] = None,
+    constraint: Optional[str] = None,
+    gres: Optional[str] = None,
+    exclude: Optional[str] = None,
+    nodelist: Optional[str] = None,
+    extra_sbatch_options: Optional[Sequence[str]] = None,
+    array_concurrency: Optional[int] = None,
+    extra_run_args: str = "",
     run_args: Optional[Sequence[str]] = None,
 ) -> str:
     """Render a Slurm array script that runs one ivsBLASTn chunk per task."""
@@ -34,11 +104,30 @@ def render_slurm_array_script(
     if chunk_count <= 0:
         raise ValueError(f"No chunks found in manifest: {manifest}")
     concurrency = f"%{array_concurrency}" if array_concurrency else ""
-    partition_line = f"#SBATCH --partition={partition}\n" if partition else ""
+    array_spec = f"1-{chunk_count}{concurrency}"
     manifest_arg = shlex.quote(str(manifest.resolve()))
     outdir_abs = outdir.resolve()
     outdir_arg = shlex.quote(str(outdir_abs))
     db_arg = shlex.quote(str(db.resolve()))
+    header = render_sbatch_header(
+        job_name="ivsBLASTn",
+        cpus_per_task=cpus_per_task,
+        mem=mem,
+        time=time,
+        output=outdir_abs / "slurm" / "logs" / "%A_%a.out",
+        error=outdir_abs / "slurm" / "logs" / "%A_%a.err",
+        array=array_spec,
+        partition=partition,
+        account=account,
+        qos=qos,
+        nodes=nodes,
+        ntasks=ntasks,
+        constraint=constraint,
+        gres=gres,
+        exclude=exclude,
+        nodelist=nodelist,
+        extra_sbatch_options=extra_sbatch_options,
+    )
     command_lines: List[str] = [
         "ivsBLASTn run",
         '  --query "$CHUNK_FASTA"',
@@ -63,14 +152,7 @@ def render_slurm_array_script(
     else:
         rendered_command = " \\\n".join(command_lines) + "\n"
 
-    return f"""#!/usr/bin/env bash
-#SBATCH --job-name=ivsBLASTn
-#SBATCH --cpus-per-task={cpus_per_task}
-#SBATCH --mem={mem}
-#SBATCH --time={time}
-{partition_line}#SBATCH --output={outdir_abs}/slurm/logs/%A_%a.out
-#SBATCH --error={outdir_abs}/slurm/logs/%A_%a.err
-#SBATCH --array=1-{chunk_count}{concurrency}
+    return f"""{header}
 
 set -euo pipefail
 

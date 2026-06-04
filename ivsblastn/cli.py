@@ -236,6 +236,15 @@ def build_parser() -> argparse.ArgumentParser:
     submit_parser.add_argument("--mem", default="16G", help="Slurm memory per task. Default: 16G.")
     submit_parser.add_argument("--time", default="12:00:00", help="Slurm time limit. Default: 12:00:00.")
     submit_parser.add_argument("--partition", default=None, help="Optional Slurm partition.")
+    submit_parser.add_argument("--account", default=None, help="Optional Slurm account/project, written as #SBATCH --account.")
+    submit_parser.add_argument("--qos", default=None, help="Optional Slurm QoS, written as #SBATCH --qos.")
+    submit_parser.add_argument("--nodes", default=None, type=positive_int, help="Optional Slurm node count, written as #SBATCH --nodes.")
+    submit_parser.add_argument("--ntasks", default=None, type=positive_int, help="Optional Slurm task count, written as #SBATCH --ntasks.")
+    submit_parser.add_argument("--constraint", default=None, help="Optional Slurm node constraint, written as #SBATCH --constraint.")
+    submit_parser.add_argument("--gres", default=None, help="Optional Slurm generic resources, written as #SBATCH --gres.")
+    submit_parser.add_argument("--exclude", default=None, help="Optional Slurm excluded node list, written as #SBATCH --exclude.")
+    submit_parser.add_argument("--nodelist", default=None, help="Optional Slurm node list, written as #SBATCH --nodelist.")
+    submit_parser.add_argument("--sbatch-option", action="append", default=[], help="Extra SBATCH directive, for example '--mail-type=END'. Can be repeated.")
     submit_parser.add_argument("--array-concurrency", default=None, type=positive_int, help="Optional Slurm array concurrency limit.")
     submit_parser.add_argument("--extra-run-args", default="", help="Extra arguments appended to each `ivsBLASTn run` command.")
     submit_parser.add_argument("--submit", action="store_true", help="Submit with sbatch after writing the script. Default: write only.")
@@ -446,6 +455,15 @@ def submit_slurm_command(args: argparse.Namespace) -> int:
         mem=args.mem,
         time=args.time,
         partition=args.partition,
+        account=args.account,
+        qos=args.qos,
+        nodes=args.nodes,
+        ntasks=args.ntasks,
+        constraint=args.constraint,
+        gres=args.gres,
+        exclude=args.exclude,
+        nodelist=args.nodelist,
+        extra_sbatch_options=args.sbatch_option,
         array_concurrency=args.array_concurrency,
         extra_run_args=args.extra_run_args,
         run_args=slurm_run_args(args),

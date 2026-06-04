@@ -342,6 +342,35 @@ ivsBLASTn submit-slurm \
 
 Detection parameters such as `--min-pident`, `--min-hsp-len`, `--min-intron-len`, `--max-ref-gap`, confidence thresholds, `--blast-task`, and `--blast-evalue` can be passed directly to `submit-slurm`. They are forwarded to every `ivsBLASTn run` array task, so local and Slurm runs can use the same thresholds.
 
+For commercial HPC platforms that require project accounting:
+
+```bash
+ivsBLASTn submit-slurm \
+  --chunks-dir batch01/chunks \
+  --db reference_db_prefix \
+  --taxonomy reference.tax.tsv \
+  --outdir batch01 \
+  --threads 20 \
+  --cpus-per-task 20 \
+  --partition normal_fcp1 \
+  --qos qos_prj_219_3 \
+  --account prj_219_3 \
+  --mem 32G \
+  --time 24:00:00 \
+  --array-concurrency 40
+```
+
+This writes:
+
+```text
+#SBATCH --partition=normal_fcp1
+#SBATCH --qos=qos_prj_219_3
+#SBATCH --account=prj_219_3
+#SBATCH --cpus-per-task=20
+```
+
+Other platform-specific directives can be set with `--nodes`, `--ntasks`, `--constraint`, `--gres`, `--exclude`, `--nodelist`, or repeated `--sbatch-option`.
+
 Review:
 
 ```text
