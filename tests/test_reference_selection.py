@@ -175,7 +175,7 @@ class ReferenceSelectionTests(unittest.TestCase):
             manifest = (outdir / "reference_manifest.tsv").read_text(encoding="utf-8")
             self.assertIn("reference_self_clean_report", manifest)
             self.assertIn("reference_self_clean_summary", manifest)
-            self.assertIn("reference_introns_fasta", manifest)
+            self.assertIn("reference_ivs_fasta", manifest)
 
     def test_reference_output_paths_add_self_clean_report_compatibility_fields(self) -> None:
         with TemporaryDirectory() as tmpdir:
@@ -198,8 +198,10 @@ class ReferenceSelectionTests(unittest.TestCase):
             result = QueryResult(
                 query_id="ref1",
                 query_len=10,
-                classification="HIGH_CONFIDENCE_16S_INTRON",
+                classification="HIGH_CONFIDENCE_16S_IVS",
                 confidence="HIGH",
+                ivs_index=1,
+                ivs_count=1,
                 intron_start=4,
                 intron_end=6,
                 intron_len=3,
@@ -213,7 +215,7 @@ class ReferenceSelectionTests(unittest.TestCase):
 
             text = output.read_text(encoding="utf-8")
             self.assertEqual(written, 1)
-            self.assertIn(">ref1|reference_intron|4-6|len=3|confidence=HIGH|action=removed", text)
+            self.assertIn(">ref1|reference_ivs_1|4-6|len=3|confidence=HIGH|action=removed", text)
             self.assertIn("CCC", text)
 
 

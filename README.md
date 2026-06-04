@@ -129,7 +129,7 @@ reference_silva_nr99/
   results/
     reference_self_clean.report.md      # only with --clean-ref-introns
     reference_self_clean.summary.tsv     # only with --clean-ref-introns
-    reference_self_clean.introns.fa      # only with --clean-ref-introns
+    reference_self_clean.introns.fa      # IVS FASTA; legacy-compatible filename
   reference_manifest.tsv
 ```
 
@@ -144,7 +144,7 @@ ivsBLASTn run \
   --threads 8
 ```
 
-With `--clean-ref-introns`, `reference_self_clean.report.md` summarizes reference IVS candidates and `reference_self_clean.introns.fa` contains the IVS sequences actually removed from `cleaned_reference.fa`.
+With `--clean-ref-introns`, `reference_self_clean.report.md` summarizes reference IVS candidates and `reference_self_clean.introns.fa` contains the IVS sequences actually removed from `cleaned_reference.fa`; the filename is kept for compatibility.
 
 You can still initialize and run in one command:
 
@@ -262,7 +262,7 @@ So the maximum reported HSP count per query is bounded by:
 
 For IVS detection in 16S rRNA genes, IVSs are expected to be sparse, so the default `--blast-max-hsps 5` keeps BLAST output smaller than the earlier conservative value of 20.
 
-The default thresholds are publication-oriented rather than discovery-only. The permissive `--min-pident 70` keeps distant 16S/SSU exon support available, while the geometry filters and MEDIUM/HIGH support requirements control sequence-changing calls. LOW-confidence candidates remain visible in `*.summary.tsv` and `*.supporting_hsps.tsv` for manual review, but sequence-changing outputs (`*.intron_free.fa`, `*.introns.fa`, and BED files) use `--min-output-confidence MEDIUM` by default. Reference self-cleaning also uses `--ref-clean-min-confidence MEDIUM` by default to avoid removing reference sequence from a single-subject signal. For stricter analyses, raise `--min-pident` explicitly, for example to 80 or 85.
+The default thresholds are publication-oriented rather than discovery-only. The permissive `--min-pident 70` keeps distant 16S/SSU exon support available, while the geometry filters and MEDIUM/HIGH support requirements control sequence-changing calls. LOW-confidence candidates remain visible in `*.summary.tsv` and `*.supporting_hsps.tsv` for manual review, but sequence-changing outputs (`*.intron_free.fa`, `*.introns.fa`, and BED files; legacy-compatible filenames) use `--min-output-confidence MEDIUM` by default. Reference self-cleaning also uses `--ref-clean-min-confidence MEDIUM` by default to avoid removing reference sequence from a single-subject signal. For stricter analyses, raise `--min-pident` explicitly, for example to 80 or 85.
 
 For manuscripts, report the exact command line plus the confidence tier used for sequence editing. A conservative wording is that MEDIUM/HIGH IVSs were used for downstream corrected sequences, while LOW calls were retained as candidate signals requiring manual inspection.
 
@@ -537,7 +537,7 @@ raw_reference.fa
   -> split into reference-query chunks
   -> Slurm array: each chunk vs raw_reference_db
   -> each chunk detects reference IVSs
-  -> concatenate chunk intron_free.fa files
+  -> concatenate chunk IVS-free FASTA files
   -> build cleaned_reference_db
 ```
 
@@ -621,9 +621,9 @@ blast_subjects_analyzed
 best_blast_subject
 classification
 confidence
-intron_start
-intron_end
-intron_len
+ivs_start
+ivs_end
+ivs_len
 support_subjects
 support_taxa_at_genus
 median_subject_gap
@@ -633,7 +633,7 @@ best_subject_taxonomy
 reasons
 ```
 
-For `NO_INTRON_SIGNAL`, first check `blast_status`:
+For `NO_IVS_SIGNAL`, first check `blast_status`:
 
 ```text
 NO_BLAST_HIT              no BLASTN HSP was reported for the query
@@ -657,14 +657,14 @@ Review candidates by checking:
 2. `support_taxa_at_genus`: support across genera is stronger than one narrow group.
 3. `median_subject_gap`: values near 0 are best.
 4. `median_pident`: should be reasonable for the reference distance.
-5. `intron_len`: very short or near `--max-intron-len` needs manual inspection.
+5. `ivs_len`: very short or near `--max-intron-len` needs manual inspection.
 6. `*.supporting_hsps.tsv`: supporting HSP pairs should agree on breakpoint coordinates.
 
 Output FASTA files:
 
 ```text
-*.intron_free.fa   all query sequences; IVS removed only for candidates passing --min-output-confidence
-*.introns.fa       candidate IVS sequences passing --min-output-confidence
+*.intron_free.fa   legacy-compatible filename; contains IVS-free query sequences
+*.introns.fa       legacy-compatible filename; contains candidate IVS sequences passing --min-output-confidence
 ```
 
 The default `--min-output-confidence` is `MEDIUM`. LOW-confidence rows are candidate signals for inspection, not default sequence edits.
@@ -672,7 +672,7 @@ The default `--min-output-confidence` is `MEDIUM`. LOW-confidence rows are candi
 BED files:
 
 ```text
-*.introns.bed      candidate IVS intervals
+*.introns.bed      legacy-compatible filename; contains candidate IVS intervals
 *.exons.bed        exon intervals after IVS removal
 ```
 
@@ -727,16 +727,16 @@ The candidate IVS interval is:
 
 ```text
 query_gap = right.qlo - left.qhi - 1
-intron_start = left.qhi + 1
-intron_end   = right.qlo - 1
-intron_len   = intron_end - intron_start + 1
+ivs_start = left.qhi + 1
+ivs_end   = right.qlo - 1
+ivs_len   = ivs_end - ivs_start + 1
 ```
 
 Accepted query-side geometry:
 
 ```text
 --min-intron-len <= query_gap <= --max-intron-len
---min-intron-len <= intron_len <= --max-intron-len
+--min-intron-len <= ivs_len <= --max-intron-len
 ```
 
 Subject-side continuity for same orientation:
@@ -763,15 +763,15 @@ Pair score:
 pair_score = hsp1.bitscore + hsp2.bitscore - 2 * abs(subject_gap)
 ```
 
-Each subject contributes at most one best HSP pair.
+Each subject can support multiple distinct IVS clusters, but contributes at most one best HSP pair to any single selected cluster.
 
 ### Breakpoint Clustering
 
 Support pairs are clustered by query-relative IVS coordinates:
 
 ```text
-abs(pair.intron_start - median(cluster.intron_start)) <= --breakpoint-window
-abs(pair.intron_end   - median(cluster.intron_end))   <= --breakpoint-window
+abs(pair.ivs_start - median(cluster.ivs_start)) <= --breakpoint-window
+abs(pair.ivs_end   - median(cluster.ivs_end))   <= --breakpoint-window
 ```
 
 Clusters are ranked by:
@@ -782,7 +782,7 @@ Clusters are ranked by:
 3. sum(pair_score)
 ```
 
-Final IVS coordinates are median coordinates from the best cluster.
+Final IVS coordinates are median coordinates from each selected cluster. If one query contains multiple non-overlapping IVS clusters, `ivsBLASTn` reports one `*.summary.tsv` row per IVS event with `ivs_index` and `ivs_count`. Overlapping clusters are resolved by keeping the higher-ranked cluster first, so ambiguous overlapping calls do not lead to double removal from FASTA outputs.
 
 ### Confidence Rules
 
@@ -790,10 +790,10 @@ Default confidence thresholds:
 
 | Confidence | Classification | Default rule |
 | --- | --- | --- |
-| `HIGH` | `HIGH_CONFIDENCE_16S_INTRON` | `support_subjects >= 10` and `support_taxa >= 3` |
-| `MEDIUM` | `MEDIUM_CONFIDENCE_16S_INTRON` | `support_subjects >= 3` and `support_taxa >= 3` |
-| `LOW` | `LOW_CONFIDENCE_16S_INTRON` | `support_subjects >= 1` |
-| `NONE` | `NO_INTRON_SIGNAL` | no supported HSP-gap cluster |
+| `HIGH` | `HIGH_CONFIDENCE_16S_IVS` | `support_subjects >= 10` and `support_taxa >= 3` |
+| `MEDIUM` | `MEDIUM_CONFIDENCE_16S_IVS` | `support_subjects >= 3` and `support_taxa >= 3` |
+| `LOW` | `LOW_CONFIDENCE_16S_IVS` | `support_subjects >= 1` |
+| `NONE` | `NO_IVS_SIGNAL` | no supported HSP-gap cluster |
 
 The default `--tax-rank` is `genus`.
 
@@ -805,6 +805,7 @@ The default `--tax-rank` is `genus`.
 | --- | --- |
 | `query_id` | Query FASTA ID |
 | `query_len` | Query sequence length |
+| `ivs_index`, `ivs_count` | IVS event number and total IVS events for the query; blank for no-signal rows |
 | `blast_status` | Whether BLAST produced usable HSPs and whether an IVS-like HSP geometry was detected |
 | `blast_raw_hsps`, `blast_raw_subjects` | BLAST outfmt rows and unique subjects before `--min-pident` / `--min-hsp-len` filtering |
 | `blast_retained_hsps`, `blast_retained_subjects` | HSPs and subjects retained after identity and length filtering |
@@ -814,8 +815,9 @@ The default `--tax-rank` is `genus`.
 | `best_blast_taxonomy` | Taxonomy for `best_blast_subject`, when available |
 | `classification` | Confidence class label |
 | `confidence` | `HIGH`, `MEDIUM`, `LOW`, or `NONE` |
-| `intron_start`, `intron_end`, `intron_len` | Query-relative 1-based closed IVS interval |
+| `ivs_start`, `ivs_end`, `ivs_len` | Query-relative 1-based closed IVS interval |
 | `exon1`, `exon2` | Query-relative exon intervals after IVS removal |
+| `ivs_free_len` | Query length after removing this IVS event only |
 | `support_subjects` | Unique supporting subjects in the best cluster |
 | `support_taxa_at_<rank>` | Unique taxa at selected rank |
 | `median_subject_gap` | Median subject-side gap/overlap |
@@ -823,7 +825,7 @@ The default `--tax-rank` is `genus`.
 | `best_subject` | Highest-scoring support subject |
 | `reasons` | Pipe-delimited algorithm metadata |
 
-`*.supporting_hsps.tsv` contains one row per supporting subject pair in the best cluster.
+`*.supporting_hsps.tsv` contains one row per supporting subject pair per selected IVS cluster.
 
 ## Known Limitations
 

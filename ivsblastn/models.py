@@ -59,7 +59,7 @@ class BlastQueryStats:
 
 @dataclass(frozen=True)
 class SupportPair:
-    """Best intron-like HSP pair for one query-subject comparison."""
+    """Best IVS-like HSP pair for one query-subject comparison."""
 
     query_id: str
     subject_id: str
@@ -87,12 +87,14 @@ class ReferenceRecord:
 
 @dataclass
 class QueryResult:
-    """Final intron detection result for one query."""
+    """Final IVS detection result for one query or one IVS event."""
 
     query_id: str
     query_len: int
     classification: str
     confidence: str
+    ivs_index: int = 0
+    ivs_count: int = 0
     blast_status: str = "NO_BLAST_HIT"
     blast_raw_hsps: int = 0
     blast_raw_subjects: int = 0

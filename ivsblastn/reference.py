@@ -6,7 +6,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-from .algorithm import analyze_query, confidence_rank, is_intron_result
+from .algorithm import analyze_query_all, confidence_rank, is_intron_result
 from .blast import make_blast_db, parse_blast_with_stats, run_blastn_to_file
 from .fasta import (
     clean_dna_sequence,
@@ -40,7 +40,7 @@ def write_reference_introns_fasta(path: Path, ref_seqs: Dict[str, str], results:
             intron = seq[result.intron_start - 1 : result.intron_end]
             write_fasta_record(
                 handle,
-                f"{result.query_id}|reference_intron|{result.intron_start}-{result.intron_end}|len={result.intron_len}|confidence={result.confidence}|action=removed",
+                f"{result.query_id}|reference_ivs_{result.ivs_index or 1}|{result.intron_start}-{result.intron_end}|len={result.intron_len}|confidence={result.confidence}|action=removed",
                 intron,
             )
             written += 1
@@ -142,7 +142,7 @@ def preprocess_reference(args: argparse.Namespace) -> Tuple[Path, Path, Path]:
     return args.raw_ref_fa, args.raw_ref_tax, args.raw_ref_db
 
 def clean_reference_introns(args: argparse.Namespace, ref_fa: Path, tax_tsv: Path, db_prefix: Path) -> Tuple[Path, Path, Path]:
-    """Self-BLAST reference, remove candidate introns, and build cleaned DB."""
+    """Self-BLAST reference, remove candidate IVSs, and build cleaned DB."""
 
     self_blast = run_blastn_to_file(
         query=ref_fa,
@@ -158,8 +158,8 @@ def clean_reference_introns(args: argparse.Namespace, ref_fa: Path, tax_tsv: Pat
     ref_blast_by_query, ref_blast_stats_by_query = parse_blast_with_stats(self_blast, args.min_pident, args.min_hsp_len)
     ref_results: List[QueryResult] = []
     for query_id in sorted(ref_seqs):
-        ref_results.append(
-            analyze_query(
+        ref_results.extend(
+            analyze_query_all(
                 query_id,
                 ref_blast_by_query.get(query_id, {}),
                 len(ref_seqs.get(query_id, "")),
@@ -173,18 +173,20 @@ def clean_reference_introns(args: argparse.Namespace, ref_fa: Path, tax_tsv: Pat
     write_supporting_hsps(output_path(args.ref_self_clean_prefix, ".supporting_hsps.tsv"), ref_results)
     write_report(output_path(args.ref_self_clean_prefix, ".report.md"), ref_results, args)
 
-    remove_by_id = {r.query_id: r for r in ref_results if is_intron_result(r, args.ref_clean_min_confidence)}
+    remove_by_id: Dict[str, List[QueryResult]] = defaultdict(list)
+    for result in ref_results:
+        if is_intron_result(result, args.ref_clean_min_confidence):
+            remove_by_id[result.query_id].append(result)
     removed_introns_fa = getattr(args, "ref_self_clean_introns_fa", output_path(args.ref_self_clean_prefix, ".introns.fa"))
     removed_introns = write_reference_introns_fasta(removed_introns_fa, ref_seqs, ref_results, args.ref_clean_min_confidence)
-    LOG.info("Reference sequences with candidate introns to remove: %s", len(remove_by_id))
-    LOG.info("Reference intron sequences written: %s", removed_introns)
+    LOG.info("Reference sequences with candidate IVSs to remove: %s", len(remove_by_id))
+    LOG.info("Reference IVS sequences written: %s", removed_introns)
     with args.cleaned_ref_fa.open("wt", encoding="utf-8") as fa_out, args.cleaned_ref_tax.open("wt", encoding="utf-8", newline="") as tax_file:
         tax_writer = csv.writer(tax_file, delimiter=chr(9), lineterminator=chr(10))
         for seq_id in sorted(ref_seqs):
             seq = ref_seqs[seq_id]
-            result = remove_by_id.get(seq_id)
-            if result is not None:
-                seq = seq[result.exon1_start - 1 : result.exon1_end] + seq[result.exon2_start - 1 : result.exon2_end]
+            for result in sorted(remove_by_id.get(seq_id, []), key=lambda r: r.intron_start, reverse=True):
+                seq = seq[: result.intron_start - 1] + seq[result.intron_end :]
             write_fasta_record(fa_out, seq_id, seq)
             tax_writer.writerow([seq_id, ref_taxonomy.get(seq_id, "")])
     make_blast_db(args.cleaned_ref_fa, args.cleaned_ref_db, args.makeblastdb_bin)

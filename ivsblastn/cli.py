@@ -11,7 +11,7 @@ from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn
 from rich_argparse import RichHelpFormatter
 
 from . import __version__
-from .algorithm import analyze_query, confidence_rank
+from .algorithm import analyze_query_all, confidence_rank
 from .blast import parse_blast_with_stats, run_query_blastn
 from .fasta import read_fasta
 from .logging import CONSOLE, LOG, setup_logging
@@ -123,8 +123,8 @@ def add_run_args(parser: argparse.ArgumentParser) -> None:
     filters.add_argument("--ref-domains", default="Archaea,Bacteria", help="Comma-separated SILVA domains retained with --ref-fasta. Default: Archaea,Bacteria.")
     filters.add_argument("--ref-per-species", default=1, type=nonnegative_int, help="Maximum sequences per clear species in reference preprocessing, keeping the longest sequences first. Use 0 to disable. Default: 1.")
     filters.add_argument("--ref-unclear-per-genus", default=5, type=nonnegative_int, help="Maximum unclear-species records retained per genus, keeping the longest sequences first. Use 0 to skip all unclear species. Default: 5.")
-    filters.add_argument("--clean-ref-introns", action="store_true", help="Self-BLAST reference and remove candidate introns before query BLAST. Default: disabled.")
-    filters.add_argument("--ref-clean-min-confidence", default=DEFAULT_REF_CLEAN_MIN_CONFIDENCE, choices=["LOW", "MEDIUM", "HIGH"], help=f"Minimum confidence required to remove a reference intron. Default: {DEFAULT_REF_CLEAN_MIN_CONFIDENCE}.")
+    filters.add_argument("--clean-ref-introns", action="store_true", help="Self-BLAST reference and remove candidate IVSs before query BLAST. Default: disabled.")
+    filters.add_argument("--ref-clean-min-confidence", default=DEFAULT_REF_CLEAN_MIN_CONFIDENCE, choices=["LOW", "MEDIUM", "HIGH"], help=f"Minimum confidence required to remove a reference IVS. Default: {DEFAULT_REF_CLEAN_MIN_CONFIDENCE}.")
     filters.add_argument("--ref-self-blast-max-target-seqs", default=DEFAULT_REF_SELF_BLAST_MAX_TARGET_SEQS, type=positive_int, help=f"Reference self-BLAST -max_target_seqs. Default: {DEFAULT_REF_SELF_BLAST_MAX_TARGET_SEQS}.")
     filters.add_argument("--ref-self-blast-max-hsps", default=DEFAULT_REF_SELF_BLAST_MAX_HSPS, type=positive_int, help=f"Reference self-BLAST -max_hsps. Default: {DEFAULT_REF_SELF_BLAST_MAX_HSPS}.")
     filters.add_argument("--min-pident", default=DEFAULT_MIN_PIDENT, type=probability_percent, help=f"Minimum HSP percent identity. Default: {DEFAULT_MIN_PIDENT}.")
@@ -153,8 +153,8 @@ def add_run_args(parser: argparse.ArgumentParser) -> None:
     confidence.add_argument("--medium-support-taxa", default=3, type=positive_int, help="Minimum taxa for MEDIUM confidence. Default: 3.")
     confidence.add_argument("--high-support-subjects", default=10, type=positive_int, help="Minimum subjects for HIGH confidence. Default: 10.")
     confidence.add_argument("--high-support-taxa", default=3, type=positive_int, help="Minimum taxa for HIGH confidence. Default: 3.")
-    confidence.add_argument("--min-output-confidence", default=DEFAULT_MIN_OUTPUT_CONFIDENCE, choices=["LOW", "MEDIUM", "HIGH"], help=f"Minimum confidence removed in intron-free FASTA and written to intron FASTA/BED outputs. Default: {DEFAULT_MIN_OUTPUT_CONFIDENCE}.")
-    confidence.add_argument("--gzip-fasta-output", action="store_true", help="Write intron-free and intron FASTA outputs as .fa.gz. Default: disabled.")
+    confidence.add_argument("--min-output-confidence", default=DEFAULT_MIN_OUTPUT_CONFIDENCE, choices=["LOW", "MEDIUM", "HIGH"], help=f"Minimum confidence removed in IVS-free FASTA and written to IVS FASTA/BED outputs. Default: {DEFAULT_MIN_OUTPUT_CONFIDENCE}.")
+    confidence.add_argument("--gzip-fasta-output", action="store_true", help="Write IVS-free and IVS FASTA outputs as .fa.gz. Default: disabled.")
 
     runtime = parser.add_argument_group("Runtime")
     runtime.add_argument("--threads", default=4, type=positive_int, help="Worker threads. BLASTN also uses this value. Default: 4.")
@@ -260,8 +260,8 @@ def build_parser() -> argparse.ArgumentParser:
     submit_detection.add_argument("--medium-support-taxa", default=3, type=positive_int, help="Minimum taxa for MEDIUM confidence forwarded to each run. Default: 3.")
     submit_detection.add_argument("--high-support-subjects", default=10, type=positive_int, help="Minimum subjects for HIGH confidence forwarded to each run. Default: 10.")
     submit_detection.add_argument("--high-support-taxa", default=3, type=positive_int, help="Minimum taxa for HIGH confidence forwarded to each run. Default: 3.")
-    submit_detection.add_argument("--min-output-confidence", default=DEFAULT_MIN_OUTPUT_CONFIDENCE, choices=["LOW", "MEDIUM", "HIGH"], help=f"Minimum confidence for FASTA/BED outputs forwarded to each run. Default: {DEFAULT_MIN_OUTPUT_CONFIDENCE}.")
-    submit_detection.add_argument("--gzip-fasta-output", action="store_true", help="Write per-chunk FASTA outputs as .fa.gz and merge them as gzip streams. Default: disabled.")
+    submit_detection.add_argument("--min-output-confidence", default=DEFAULT_MIN_OUTPUT_CONFIDENCE, choices=["LOW", "MEDIUM", "HIGH"], help=f"Minimum IVS confidence for FASTA/BED outputs forwarded to each run. Default: {DEFAULT_MIN_OUTPUT_CONFIDENCE}.")
+    submit_detection.add_argument("--gzip-fasta-output", action="store_true", help="Write per-chunk IVS-free and IVS FASTA outputs as .fa.gz and merge them as gzip streams. Default: disabled.")
 
     submit_slurm = submit_parser.add_argument_group("Slurm resources and platform directives")
     submit_slurm.add_argument("--cpus-per-task", default=8, type=positive_int, help="Slurm CPUs per array task. Default: 8.")
@@ -379,21 +379,21 @@ def run_pipeline(args: argparse.Namespace) -> int:
         query_ids = list(seqs.keys())
         task = progress.add_task("Detecting IVSs", total=len(query_ids))
 
-        def worker(query_id: str) -> QueryResult:
-            return analyze_query(query_id, blast_by_query.get(query_id, {}), len(seqs.get(query_id, "")), taxonomy, args, blast_stats_by_query.get(query_id))
+        def worker(query_id: str) -> List[QueryResult]:
+            return analyze_query_all(query_id, blast_by_query.get(query_id, {}), len(seqs.get(query_id, "")), taxonomy, args, blast_stats_by_query.get(query_id))
 
         results: List[QueryResult] = []
         if args.threads == 1:
             for query_id in query_ids:
-                results.append(worker(query_id))
+                results.extend(worker(query_id))
                 progress.advance(task)
         else:
             with futures.ThreadPoolExecutor(max_workers=args.threads) as executor:
-                for result in executor.map(worker, query_ids, chunksize=256):
-                    results.append(result)
+                for query_results in executor.map(worker, query_ids, chunksize=256):
+                    results.extend(query_results)
                     progress.advance(task)
 
-        results.sort(key=lambda r: (confidence_rank(r.confidence), r.support_subjects, r.support_taxa, r.query_id), reverse=True)
+        results.sort(key=lambda r: (confidence_rank(r.confidence), r.support_subjects, r.support_taxa, r.query_id, -r.ivs_index), reverse=True)
 
         task = progress.add_task("Writing outputs", total=6)
         write_summary(args.summary_tsv, results, args.tax_rank)
@@ -460,7 +460,7 @@ def init_reference_command(args: argparse.Namespace) -> int:
         if args.clean_ref_introns:
             print(f"reference_self_clean_report\t{(args.results_dir / 'reference_self_clean.report.md').resolve()}", file=handle)
             print(f"reference_self_clean_summary\t{(args.results_dir / 'reference_self_clean.summary.tsv').resolve()}", file=handle)
-            print(f"reference_introns_fasta\t{args.ref_self_clean_introns_fa.resolve()}", file=handle)
+            print(f"reference_ivs_fasta\t{args.ref_self_clean_introns_fa.resolve()}", file=handle)
 
     CONSOLE.print("Reference initialized")
     CONSOLE.print(f"  DB prefix: {db_prefix}")

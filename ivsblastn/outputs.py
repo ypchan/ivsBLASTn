@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 import csv
-from collections import Counter
+from collections import Counter, defaultdict
 from pathlib import Path
 from statistics import median
 from typing import Dict, List
@@ -20,6 +20,8 @@ def summary_row(result: QueryResult, tax_rank: str) -> Dict[str, str]:
     return {
         "query_id": result.query_id,
         "query_len": str(result.query_len),
+        "ivs_index": str(result.ivs_index) if result.ivs_index else "",
+        "ivs_count": str(result.ivs_count) if result.ivs_count else "",
         "blast_status": result.blast_status,
         "blast_raw_hsps": str(result.blast_raw_hsps),
         "blast_raw_subjects": str(result.blast_raw_subjects),
@@ -32,12 +34,12 @@ def summary_row(result: QueryResult, tax_rank: str) -> Dict[str, str]:
         "best_blast_taxonomy": result.best_blast_taxonomy,
         "classification": result.classification,
         "confidence": result.confidence,
-        "intron_start": str(result.intron_start) if result.intron_start else "",
-        "intron_end": str(result.intron_end) if result.intron_end else "",
-        "intron_len": str(result.intron_len) if result.intron_len else "",
+        "ivs_start": str(result.intron_start) if result.intron_start else "",
+        "ivs_end": str(result.intron_end) if result.intron_end else "",
+        "ivs_len": str(result.intron_len) if result.intron_len else "",
         "exon1": f"{result.exon1_start}-{result.exon1_end}" if result.exon1_start else "",
         "exon2": f"{result.exon2_start}-{result.exon2_end}" if result.exon2_start else "",
-        "intron_free_len": str(result.intron_free_len) if result.intron_free_len else "",
+        "ivs_free_len": str(result.intron_free_len) if result.intron_free_len else "",
         "support_subjects": str(result.support_subjects),
         f"support_taxa_at_{tax_rank}": str(result.support_taxa),
         "support_species": str(result.support_species),
@@ -51,18 +53,19 @@ def summary_row(result: QueryResult, tax_rank: str) -> Dict[str, str]:
     }
 
 
-def support_row(pair: SupportPair) -> Dict[str, str]:
+def support_row(pair: SupportPair, ivs_index: int) -> Dict[str, str]:
     """Convert one support pair to a TSV row."""
 
     h1, h2 = sorted([pair.hsp1, pair.hsp2], key=lambda h: (h.qlo, h.qhi))
     return {
         "query_id": pair.query_id,
+        "ivs_index": str(ivs_index),
         "subject_id": pair.subject_id,
         "taxonomy": pair.taxonomy,
         "taxon_at_rank": pair.taxon_at_rank,
-        "intron_start": str(pair.intron_start),
-        "intron_end": str(pair.intron_end),
-        "intron_len": str(pair.intron_len),
+        "ivs_start": str(pair.intron_start),
+        "ivs_end": str(pair.intron_end),
+        "ivs_len": str(pair.intron_len),
         "query_gap": str(pair.query_gap),
         "subject_gap": str(pair.subject_gap),
         "hsp1_q": f"{h1.qlo}-{h1.qhi}",
@@ -84,6 +87,8 @@ def write_summary(path: Path, results: List[QueryResult], tax_rank: str) -> None
     fields = [
         "query_id",
         "query_len",
+        "ivs_index",
+        "ivs_count",
         "blast_status",
         "blast_raw_hsps",
         "blast_raw_subjects",
@@ -96,12 +101,12 @@ def write_summary(path: Path, results: List[QueryResult], tax_rank: str) -> None
         "best_blast_taxonomy",
         "classification",
         "confidence",
-        "intron_start",
-        "intron_end",
-        "intron_len",
+        "ivs_start",
+        "ivs_end",
+        "ivs_len",
         "exon1",
         "exon2",
-        "intron_free_len",
+        "ivs_free_len",
         "support_subjects",
         f"support_taxa_at_{tax_rank}",
         "support_species",
@@ -125,12 +130,13 @@ def write_supporting_hsps(path: Path, results: List[QueryResult]) -> None:
 
     fields = [
         "query_id",
+        "ivs_index",
         "subject_id",
         "taxonomy",
         "taxon_at_rank",
-        "intron_start",
-        "intron_end",
-        "intron_len",
+        "ivs_start",
+        "ivs_end",
+        "ivs_len",
         "query_gap",
         "subject_gap",
         "hsp1_q",
@@ -149,31 +155,45 @@ def write_supporting_hsps(path: Path, results: List[QueryResult]) -> None:
         writer.writeheader()
         for result in results:
             for pair in result.support_pairs or []:
-                writer.writerow(support_row(pair))
+                writer.writerow(support_row(pair, result.ivs_index))
 
 
 def write_fasta_outputs(args: argparse.Namespace, results: List[QueryResult], seqs: Dict[str, str]) -> None:
-    """Write intron-free 16S and intron FASTA outputs."""
+    """Write IVS-free 16S and IVS FASTA outputs."""
 
-    result_by_query = {result.query_id: result for result in results}
+    results_by_query: Dict[str, List[QueryResult]] = defaultdict(list)
+    for result in results:
+        results_by_query[result.query_id].append(result)
     with open_text_auto_write(args.intron_free_fa) as free_out, open_text_auto_write(args.introns_fa) as intron_out:
         for query_id, seq in seqs.items():
             if not seq:
                 continue
-            result = result_by_query.get(query_id)
-            if result is None:
-                write_fasta_record(free_out, f"{query_id}|intron_free|intron=none|confidence=NONE|action=unchanged", seq)
+            query_results = sorted(results_by_query.get(query_id, []), key=lambda r: (r.intron_start, r.intron_end))
+            if not query_results:
+                write_fasta_record(free_out, f"{query_id}|ivs_free|ivs=none|confidence=NONE|action=unchanged", seq)
                 continue
-            if is_intron_result(result, args.min_output_confidence):
-                exon1 = seq[result.exon1_start - 1 : result.exon1_end]
-                exon2 = seq[result.exon2_start - 1 : result.exon2_end]
-                intron = seq[result.intron_start - 1 : result.intron_end]
-                write_fasta_record(free_out, f"{result.query_id}|intron_free|intron={result.intron_start}-{result.intron_end}|confidence={result.confidence}|action=removed", exon1 + exon2)
-                write_fasta_record(intron_out, f"{result.query_id}|intron|{result.intron_start}-{result.intron_end}|len={result.intron_len}|confidence={result.confidence}", intron)
-            elif result.intron_start and result.intron_end:
-                write_fasta_record(free_out, f"{result.query_id}|intron_free|intron={result.intron_start}-{result.intron_end}|confidence={result.confidence}|action=unchanged_below_min_output_confidence", seq)
+            passing_results = [result for result in query_results if is_intron_result(result, args.min_output_confidence)]
+            candidate_results = [result for result in query_results if result.intron_start and result.intron_end]
+            if passing_results:
+                seq_parts: List[str] = []
+                cursor = 1
+                for result in passing_results:
+                    seq_parts.append(seq[cursor - 1 : result.intron_start - 1])
+                    cursor = result.intron_end + 1
+                seq_parts.append(seq[cursor - 1 :])
+                intervals = ",".join(f"{result.intron_start}-{result.intron_end}" for result in passing_results)
+                confidence = max((result.confidence for result in passing_results), key=confidence_rank)
+                write_fasta_record(free_out, f"{query_id}|ivs_free|ivs={intervals}|ivs_count={len(passing_results)}|confidence={confidence}|action=removed", "".join(seq_parts))
+                for result in passing_results:
+                    ivs = seq[result.intron_start - 1 : result.intron_end]
+                    write_fasta_record(intron_out, f"{result.query_id}|ivs_{result.ivs_index or 1}|{result.intron_start}-{result.intron_end}|len={result.intron_len}|confidence={result.confidence}", ivs)
+            elif candidate_results:
+                intervals = ",".join(f"{result.intron_start}-{result.intron_end}" for result in candidate_results)
+                confidence = max((result.confidence for result in candidate_results), key=confidence_rank)
+                write_fasta_record(free_out, f"{query_id}|ivs_free|ivs={intervals}|ivs_count={len(candidate_results)}|confidence={confidence}|action=unchanged_below_min_output_confidence", seq)
             else:
-                write_fasta_record(free_out, f"{result.query_id}|intron_free|intron=none|confidence={result.confidence}|action=unchanged", seq)
+                confidence = max((result.confidence for result in query_results), key=confidence_rank)
+                write_fasta_record(free_out, f"{query_id}|ivs_free|ivs=none|confidence={confidence}|action=unchanged", seq)
 
 
 def write_bed_outputs(args: argparse.Namespace, results: List[QueryResult]) -> None:
@@ -185,9 +205,10 @@ def write_bed_outputs(args: argparse.Namespace, results: List[QueryResult]) -> N
         for result in results:
             if not is_intron_result(result, args.min_output_confidence):
                 continue
-            intron_writer.writerow([result.query_id, result.intron_start - 1, result.intron_end, f"{result.query_id}|intron|{result.intron_start}-{result.intron_end}|confidence={result.confidence}", ".", "+"])
-            exon_writer.writerow([result.query_id, result.exon1_start - 1, result.exon1_end, f"{result.query_id}|exon1|{result.exon1_start}-{result.exon1_end}|confidence={result.confidence}", ".", "+"])
-            exon_writer.writerow([result.query_id, result.exon2_start - 1, result.exon2_end, f"{result.query_id}|exon2|{result.exon2_start}-{result.exon2_end}|confidence={result.confidence}", ".", "+"])
+            ivs_label = f"ivs_{result.ivs_index or 1}"
+            intron_writer.writerow([result.query_id, result.intron_start - 1, result.intron_end, f"{result.query_id}|{ivs_label}|{result.intron_start}-{result.intron_end}|confidence={result.confidence}", ".", "+"])
+            exon_writer.writerow([result.query_id, result.exon1_start - 1, result.exon1_end, f"{result.query_id}|{ivs_label}|exon1|{result.exon1_start}-{result.exon1_end}|confidence={result.confidence}", ".", "+"])
+            exon_writer.writerow([result.query_id, result.exon2_start - 1, result.exon2_end, f"{result.query_id}|{ivs_label}|exon2|{result.exon2_start}-{result.exon2_end}|confidence={result.confidence}", ".", "+"])
 
 
 def write_report(path: Path, results: List[QueryResult], args: argparse.Namespace) -> None:
@@ -199,6 +220,7 @@ def write_report(path: Path, results: List[QueryResult], args: argparse.Namespac
     intron_lens = [r.intron_len for r in results if r.intron_len > 0]
     candidates = [r for r in results if r.intron_start and r.intron_end]
     output_candidates = [r for r in results if is_intron_result(r, args.min_output_confidence)]
+    query_count = len({r.query_id for r in results})
 
     with path.open("wt", encoding="utf-8") as handle:
         print("# ivsBLASTn report", file=handle)
@@ -251,8 +273,9 @@ def write_report(path: Path, results: List[QueryResult], args: argparse.Namespac
         print("", file=handle)
         print("## Summary", file=handle)
         print("", file=handle)
-        print(f"- Total query results: `{len(results)}`", file=handle)
-        print(f"- Candidate IVSs detected: `{len(candidates)}`", file=handle)
+        print(f"- Query sequences analyzed: `{query_count}`", file=handle)
+        print(f"- Result rows: `{len(results)}`", file=handle)
+        print(f"- Candidate IVS events detected: `{len(candidates)}`", file=handle)
         print(f"- Candidate IVSs passing `{args.min_output_confidence}` output threshold: `{len(output_candidates)}`", file=handle)
         for label in ["HIGH", "MEDIUM", "LOW", "NONE"]:
             print(f"- {label}: `{counts.get(label, 0)}`", file=handle)
@@ -268,7 +291,7 @@ def write_report(path: Path, results: List[QueryResult], args: argparse.Namespac
             print(f"- `{status}`: `{count}`", file=handle)
         if intron_lens:
             print("", file=handle)
-            print("## Candidate intron length distribution", file=handle)
+            print("## Candidate IVS length distribution", file=handle)
             print("", file=handle)
             print(f"- Min: `{min(intron_lens)}` bp", file=handle)
             print(f"- Median: `{int(round(median(intron_lens)))}` bp", file=handle)
@@ -279,28 +302,30 @@ def write_report(path: Path, results: List[QueryResult], args: argparse.Namespac
         for result in sorted(results, key=lambda r: (confidence_rank(r.confidence), r.support_subjects, r.support_taxa), reverse=True)[:30]:
             if result.confidence == "NONE":
                 continue
-            print(f"- `{result.query_id}`: {result.confidence}, intron={result.intron_start}-{result.intron_end} ({result.intron_len} bp), support_subjects={result.support_subjects}, support_taxa={result.support_taxa}, best_subject=`{result.best_subject}`", file=handle)
+            print(f"- `{result.query_id}` ivs_{result.ivs_index or 1}: {result.confidence}, IVS={result.intron_start}-{result.intron_end} ({result.intron_len} bp), support_subjects={result.support_subjects}, support_taxa={result.support_taxa}, best_subject=`{result.best_subject}`", file=handle)
 
 def print_summary(results: List[QueryResult], args: argparse.Namespace) -> None:
     """Print terminal summary."""
 
     counts = Counter(r.confidence for r in results)
     blast_status_counts = Counter(r.blast_status for r in results)
+    query_count = len({r.query_id for r in results})
     candidates = sum(1 for r in results if r.intron_start and r.intron_end)
     output_candidates = sum(1 for r in results if is_intron_result(r, args.min_output_confidence))
     table = Table(title="ivsBLASTn summary")
     table.add_column("Metric", style="bold")
     table.add_column("Value", justify="right")
-    table.add_row("Queries analyzed", f"{len(results):,}")
-    table.add_row("High confidence", f"{counts.get('HIGH', 0):,}")
-    table.add_row("Medium confidence", f"{counts.get('MEDIUM', 0):,}")
-    table.add_row("Low confidence", f"{counts.get('LOW', 0):,}")
+    table.add_row("Queries analyzed", f"{query_count:,}")
+    table.add_row("Result rows", f"{len(results):,}")
+    table.add_row("High confidence IVS events", f"{counts.get('HIGH', 0):,}")
+    table.add_row("Medium confidence IVS events", f"{counts.get('MEDIUM', 0):,}")
+    table.add_row("Low confidence IVS events", f"{counts.get('LOW', 0):,}")
     table.add_row("No signal", f"{counts.get('NONE', 0):,}")
     table.add_row("No BLAST hit", f"{blast_status_counts.get('NO_BLAST_HIT', 0):,}")
     table.add_row("BLAST hit, no IVS pattern", f"{blast_status_counts.get('BLAST_HIT_NO_IVS_PATTERN', 0):,}")
-    table.add_row("Candidate IVSs detected", f"{candidates:,}")
+    table.add_row("Candidate IVS events detected", f"{candidates:,}")
     table.add_row(f"IVSs written/removed (>= {args.min_output_confidence})", f"{output_candidates:,}")
     table.add_row("Summary TSV", str(args.summary_tsv))
-    table.add_row("Intron-free FASTA", str(args.intron_free_fa))
-    table.add_row("Introns FASTA", str(args.introns_fa))
+    table.add_row("IVS-free FASTA", str(args.intron_free_fa))
+    table.add_row("IVSs FASTA", str(args.introns_fa))
     CONSOLE.print(table)

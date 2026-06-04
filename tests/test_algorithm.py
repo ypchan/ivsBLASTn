@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 import unittest
 
-from ivsblastn.algorithm import analyze_query
+from ivsblastn.algorithm import analyze_query, analyze_query_all
 from ivsblastn.models import BlastQueryStats, HSP
 
 
@@ -78,7 +78,36 @@ class AlgorithmStatusTests(unittest.TestCase):
         self.assertEqual(result.blast_status, "BLAST_HIT_NO_IVS_PATTERN")
         self.assertEqual(result.best_blast_subject, "s1")
         self.assertEqual(result.best_blast_pident, 88.0)
-        self.assertIn("blast_hsps_present_but_no_supported_hsp_gap_pattern", result.reasons)
+        self.assertIn("blast_hsps_present_but_no_supported_ivs_gap_pattern", result.reasons)
+
+    def test_two_non_overlapping_ivs_are_reported_for_one_query(self) -> None:
+        hsps = [
+            HSP("q1", "s1", 99.0, 100, 1, 100, 1, 100, "1e-30", 200.0),
+            HSP("q1", "s1", 99.0, 100, 151, 250, 101, 200, "1e-30", 200.0),
+            HSP("q1", "s1", 99.0, 100, 251, 350, 201, 300, "1e-30", 200.0),
+            HSP("q1", "s1", 99.0, 100, 401, 500, 301, 400, "1e-30", 200.0),
+            HSP("q1", "s2", 98.0, 100, 1, 100, 1, 100, "1e-30", 190.0),
+            HSP("q1", "s2", 98.0, 100, 151, 250, 101, 200, "1e-30", 190.0),
+            HSP("q1", "s2", 98.0, 100, 251, 350, 201, 300, "1e-30", 190.0),
+            HSP("q1", "s2", 98.0, 100, 401, 500, 301, 400, "1e-30", 190.0),
+        ]
+        results = analyze_query_all(
+            "q1",
+            {"s1": hsps[:4], "s2": hsps[4:]},
+            600,
+            {
+                "s1": "Archaea;P;C;O;F;GenusA;GenusA species",
+                "s2": "Archaea;P;C;O;F;GenusB;GenusB species",
+            },
+            algorithm_args(),
+            BlastQueryStats(raw_hsps=8, raw_subjects=2, retained_hsps=8, retained_subjects=2),
+        )
+
+        self.assertEqual(len(results), 2)
+        self.assertEqual([(r.intron_start, r.intron_end) for r in results], [(101, 150), (351, 400)])
+        self.assertEqual([r.ivs_index for r in results], [1, 2])
+        self.assertEqual([r.ivs_count for r in results], [2, 2])
+        self.assertTrue(all(r.classification == "LOW_CONFIDENCE_16S_IVS" for r in results))
 
 
 if __name__ == "__main__":

@@ -47,18 +47,18 @@ class OutputTests(unittest.TestCase):
                 threads=4,
             )
 
-            write_report(report, [QueryResult(query_id="q1", query_len=100, classification="NO_INTRON_SIGNAL", confidence="NONE")], args)
+            write_report(report, [QueryResult(query_id="q1", query_len=100, classification="NO_IVS_SIGNAL", confidence="NONE")], args)
 
             text = report.read_text(encoding="utf-8")
             self.assertIn("`blast_max_hsps`: `NA`", text)
-            self.assertIn("Candidate IVSs detected: `0`", text)
+            self.assertIn("Candidate IVS events detected: `0`", text)
             self.assertIn("Candidate IVSs passing `LOW` output threshold: `0`", text)
 
     def test_intron_result_threshold_controls_fasta_removal(self) -> None:
         low = QueryResult(
             query_id="q1",
             query_len=10,
-            classification="LOW_CONFIDENCE_16S_INTRON",
+            classification="LOW_CONFIDENCE_16S_IVS",
             confidence="LOW",
             intron_start=4,
             intron_end=6,
@@ -71,7 +71,7 @@ class OutputTests(unittest.TestCase):
         high = QueryResult(
             query_id="q2",
             query_len=10,
-            classification="HIGH_CONFIDENCE_16S_INTRON",
+            classification="HIGH_CONFIDENCE_16S_IVS",
             confidence="HIGH",
             intron_start=4,
             intron_end=6,
@@ -97,7 +97,9 @@ class OutputTests(unittest.TestCase):
             result = QueryResult(
                 query_id="q1",
                 query_len=10,
-                classification="HIGH_CONFIDENCE_16S_INTRON",
+                classification="HIGH_CONFIDENCE_16S_IVS",
+                ivs_index=1,
+                ivs_count=1,
                 confidence="HIGH",
                 intron_start=4,
                 intron_end=6,
@@ -114,8 +116,58 @@ class OutputTests(unittest.TestCase):
             intron_text = args.introns_fa.read_text(encoding="utf-8")
             self.assertIn("action=removed", free_text)
             self.assertIn("AAAGGGG", free_text)
-            self.assertIn(">q1|intron|4-6|len=3|confidence=HIGH", intron_text)
+            self.assertIn(">q1|ivs_1|4-6|len=3|confidence=HIGH", intron_text)
             self.assertIn("CCC", intron_text)
+
+    def test_write_fasta_outputs_removes_multiple_passing_ivs(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            args = SimpleNamespace(
+                intron_free_fa=tmp / "ivs_free.fa",
+                introns_fa=tmp / "ivs.fa",
+                min_output_confidence="MEDIUM",
+            )
+            results = [
+                QueryResult(
+                    query_id="q1",
+                    query_len=12,
+                    classification="MEDIUM_CONFIDENCE_16S_IVS",
+                    confidence="MEDIUM",
+                    ivs_index=1,
+                    ivs_count=2,
+                    intron_start=4,
+                    intron_end=5,
+                    intron_len=2,
+                    exon1_start=1,
+                    exon1_end=3,
+                    exon2_start=6,
+                    exon2_end=12,
+                ),
+                QueryResult(
+                    query_id="q1",
+                    query_len=12,
+                    classification="MEDIUM_CONFIDENCE_16S_IVS",
+                    confidence="MEDIUM",
+                    ivs_index=2,
+                    ivs_count=2,
+                    intron_start=9,
+                    intron_end=10,
+                    intron_len=2,
+                    exon1_start=1,
+                    exon1_end=8,
+                    exon2_start=11,
+                    exon2_end=12,
+                ),
+            ]
+
+            write_fasta_outputs(args, results, {"q1": "AAACCCTTGGGG"})
+
+            free_text = args.intron_free_fa.read_text(encoding="utf-8")
+            ivs_text = args.introns_fa.read_text(encoding="utf-8")
+            self.assertIn("ivs=4-5,9-10", free_text)
+            self.assertIn("AAACTTGG", free_text)
+            self.assertIn(">q1|ivs_1|4-5|len=2|confidence=MEDIUM", ivs_text)
+            self.assertIn(">q1|ivs_2|9-10|len=2|confidence=MEDIUM", ivs_text)
 
     def test_write_summary_includes_blast_diagnostic_columns(self) -> None:
         with TemporaryDirectory() as tmpdir:
@@ -123,7 +175,7 @@ class OutputTests(unittest.TestCase):
             result = QueryResult(
                 query_id="q1",
                 query_len=2417,
-                classification="NO_INTRON_SIGNAL",
+                classification="NO_IVS_SIGNAL",
                 confidence="NONE",
                 blast_status="BLAST_HIT_NO_IVS_PATTERN",
                 blast_raw_hsps=5,
@@ -144,6 +196,9 @@ class OutputTests(unittest.TestCase):
             self.assertIn("blast_status", text)
             self.assertIn("BLAST_HIT_NO_IVS_PATTERN", text)
             self.assertIn("best_blast_subject", text)
+            self.assertIn("ivs_index", text)
+            self.assertIn("ivs_start", text)
+            self.assertNotIn("intron_start", text)
 
     def test_print_summary_handles_blast_status_counts(self) -> None:
         args = SimpleNamespace(
@@ -155,7 +210,7 @@ class OutputTests(unittest.TestCase):
         result = QueryResult(
             query_id="q1",
             query_len=2417,
-            classification="NO_INTRON_SIGNAL",
+            classification="NO_IVS_SIGNAL",
             confidence="NONE",
             blast_status="NO_BLAST_HIT",
         )
