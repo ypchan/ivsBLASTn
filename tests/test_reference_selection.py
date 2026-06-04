@@ -6,7 +6,8 @@ import unittest
 
 from ivsblastn.fasta import genus_key_from_taxonomy, read_fasta, species_key_from_taxonomy
 from ivsblastn.cli import init_reference_command, setup_reference_output_paths
-from ivsblastn.reference import preprocess_reference
+from ivsblastn.models import QueryResult
+from ivsblastn.reference import preprocess_reference, write_reference_introns_fasta
 
 
 class ReferenceSelectionTests(unittest.TestCase):
@@ -144,6 +145,38 @@ class ReferenceSelectionTests(unittest.TestCase):
             self.assertTrue((outdir / "raw_reference.fa").exists())
             self.assertTrue((outdir / "raw_reference.tax.tsv").exists())
 
+    def test_init_reference_manifest_includes_self_clean_outputs(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            ref_fasta = tmp / "reference.fa"
+            outdir = tmp / "prepared"
+            ref_fasta.write_text(">ref1 Bacteria;P;C;O;F;Vibrio;Vibrio halioticoli\nATGCATGC\n", encoding="utf-8")
+            raw_ref_fa = outdir / "raw_reference.fa"
+            raw_ref_tax = outdir / "raw_reference.tax.tsv"
+            raw_ref_db = outdir / "raw_reference_db"
+            cleaned_ref_fa = outdir / "cleaned_reference.fa"
+            cleaned_ref_tax = outdir / "cleaned_reference.tax.tsv"
+            cleaned_ref_db = outdir / "cleaned_reference_db"
+            args = SimpleNamespace(
+                ref_fasta=ref_fasta,
+                outdir=outdir,
+                clean_ref_introns=True,
+                min_intron_len=25,
+                max_intron_len=2000,
+                ref_self_blast_max_hsps=20,
+            )
+
+            with patch("ivsblastn.cli.preprocess_reference", return_value=(raw_ref_fa, raw_ref_tax, raw_ref_db)), patch(
+                "ivsblastn.cli.clean_reference_introns",
+                return_value=(cleaned_ref_fa, cleaned_ref_tax, cleaned_ref_db),
+            ), patch("ivsblastn.cli.CONSOLE.print"):
+                self.assertEqual(init_reference_command(args), 0)
+
+            manifest = (outdir / "reference_manifest.tsv").read_text(encoding="utf-8")
+            self.assertIn("reference_self_clean_report", manifest)
+            self.assertIn("reference_self_clean_summary", manifest)
+            self.assertIn("reference_introns_fasta", manifest)
+
     def test_reference_output_paths_add_self_clean_report_compatibility_fields(self) -> None:
         with TemporaryDirectory() as tmpdir:
             args = SimpleNamespace(
@@ -155,6 +188,31 @@ class ReferenceSelectionTests(unittest.TestCase):
             setup_reference_output_paths(args)
 
             self.assertEqual(args.blast_max_hsps, 20)
+            self.assertEqual(args.ref_self_clean_introns_fa, Path(tmpdir) / "prepared" / "results" / "reference_self_clean.introns.fa")
+
+    def test_write_reference_introns_fasta_outputs_removed_reference_ivs(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "reference_self_clean.introns.fa"
+            result = QueryResult(
+                query_id="ref1",
+                query_len=10,
+                classification="HIGH_CONFIDENCE_16S_INTRON",
+                confidence="HIGH",
+                intron_start=4,
+                intron_end=6,
+                intron_len=3,
+                exon1_start=1,
+                exon1_end=3,
+                exon2_start=7,
+                exon2_end=10,
+            )
+
+            written = write_reference_introns_fasta(output, {"ref1": "AAACCCGGGG"}, [result], "LOW")
+
+            text = output.read_text(encoding="utf-8")
+            self.assertEqual(written, 1)
+            self.assertIn(">ref1|reference_intron|4-6|len=3|confidence=HIGH|action=removed", text)
+            self.assertIn("CCC", text)
 
 
 if __name__ == "__main__":

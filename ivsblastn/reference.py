@@ -25,6 +25,28 @@ from .outputs import write_report, write_summary, write_supporting_hsps
 from .paths import output_path
 from .taxonomy import parse_taxonomy
 
+
+def write_reference_introns_fasta(path: Path, ref_seqs: Dict[str, str], results: List[QueryResult], min_confidence: str) -> int:
+    """Write reference IVS sequences removed during self-cleaning."""
+
+    written = 0
+    with path.open("wt", encoding="utf-8") as handle:
+        for result in results:
+            if not is_intron_result(result, min_confidence):
+                continue
+            seq = ref_seqs.get(result.query_id, "")
+            if not seq:
+                continue
+            intron = seq[result.intron_start - 1 : result.intron_end]
+            write_fasta_record(
+                handle,
+                f"{result.query_id}|reference_intron|{result.intron_start}-{result.intron_end}|len={result.intron_len}|confidence={result.confidence}|action=removed",
+                intron,
+            )
+            written += 1
+    return written
+
+
 def preprocess_reference(args: argparse.Namespace) -> Tuple[Path, Path, Path]:
     """Filter SILVA reference, write clean FASTA/taxonomy, and build BLAST DB."""
 
@@ -143,7 +165,10 @@ def clean_reference_introns(args: argparse.Namespace, ref_fa: Path, tax_tsv: Pat
     write_report(output_path(args.ref_self_clean_prefix, ".report.md"), ref_results, args)
 
     remove_by_id = {r.query_id: r for r in ref_results if is_intron_result(r, args.ref_clean_min_confidence)}
+    removed_introns_fa = getattr(args, "ref_self_clean_introns_fa", output_path(args.ref_self_clean_prefix, ".introns.fa"))
+    removed_introns = write_reference_introns_fasta(removed_introns_fa, ref_seqs, ref_results, args.ref_clean_min_confidence)
     LOG.info("Reference sequences with candidate introns to remove: %s", len(remove_by_id))
+    LOG.info("Reference intron sequences written: %s", removed_introns)
     with args.cleaned_ref_fa.open("wt", encoding="utf-8") as fa_out, args.cleaned_ref_tax.open("wt", encoding="utf-8", newline="") as tax_file:
         tax_writer = csv.writer(tax_file, delimiter=chr(9), lineterminator=chr(10))
         for seq_id in sorted(ref_seqs):

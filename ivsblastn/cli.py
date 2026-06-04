@@ -414,6 +414,7 @@ def setup_reference_output_paths(args: argparse.Namespace) -> None:
     args.raw_ref_db = args.outdir / "raw_reference_db"
     args.ref_self_blast = args.blast_dir / "reference_self.blastn.tsv"
     args.ref_self_clean_prefix = args.results_dir / "reference_self_clean"
+    args.ref_self_clean_introns_fa = args.results_dir / "reference_self_clean.introns.fa"
     args.cleaned_ref_fa = args.outdir / "cleaned_reference.fa"
     args.cleaned_ref_tax = args.outdir / "cleaned_reference.tax.tsv"
     args.cleaned_ref_db = args.outdir / "cleaned_reference_db"
@@ -440,10 +441,17 @@ def init_reference_command(args: argparse.Namespace) -> int:
         print(f"reference_fasta\t{ref_fa.resolve()}", file=handle)
         print(f"taxonomy_tsv\t{taxonomy_tsv.resolve()}", file=handle)
         print(f"blast_db_prefix\t{db_prefix.resolve()}", file=handle)
+        if args.clean_ref_introns:
+            print(f"reference_self_clean_report\t{(args.results_dir / 'reference_self_clean.report.md').resolve()}", file=handle)
+            print(f"reference_self_clean_summary\t{(args.results_dir / 'reference_self_clean.summary.tsv').resolve()}", file=handle)
+            print(f"reference_introns_fasta\t{args.ref_self_clean_introns_fa.resolve()}", file=handle)
 
     CONSOLE.print("Reference initialized")
     CONSOLE.print(f"  DB prefix: {db_prefix}")
     CONSOLE.print(f"  Taxonomy:  {taxonomy_tsv}")
+    if args.clean_ref_introns:
+        CONSOLE.print(f"  Self-clean report: {args.results_dir / 'reference_self_clean.report.md'}")
+        CONSOLE.print(f"  Reference IVSs:    {args.ref_self_clean_introns_fa}")
     CONSOLE.print("Use with:")
     CONSOLE.print(f"  ivsBLASTn run --query query.fa --db {db_prefix} --taxonomy {taxonomy_tsv} --outdir ivs_run")
     return 0

@@ -126,6 +126,10 @@ reference_silva_nr99/
   raw_reference.fa
   raw_reference.tax.tsv
   raw_reference_db.*
+  results/
+    reference_self_clean.report.md      # only with --clean-ref-introns
+    reference_self_clean.summary.tsv     # only with --clean-ref-introns
+    reference_self_clean.introns.fa      # only with --clean-ref-introns
   reference_manifest.tsv
 ```
 
@@ -139,6 +143,8 @@ ivsBLASTn run \
   --outdir ivs_run \
   --threads 8
 ```
+
+With `--clean-ref-introns`, `reference_self_clean.report.md` summarizes reference IVS candidates and `reference_self_clean.introns.fa` contains the IVS sequences actually removed from `cleaned_reference.fa`.
 
 You can still initialize and run in one command:
 

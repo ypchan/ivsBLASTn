@@ -36,6 +36,7 @@ def setup_output_paths(args: argparse.Namespace) -> None:
     args.raw_ref_db = args.reference_dir / "raw_reference_db"
     args.ref_self_blast = args.reference_dir / "reference_self.blastn.tsv"
     args.ref_self_clean_prefix = args.reference_dir / "reference_self_clean"
+    args.ref_self_clean_introns_fa = output_path(args.ref_self_clean_prefix, ".introns.fa")
     args.cleaned_ref_fa = args.reference_dir / "cleaned_reference.fa"
     args.cleaned_ref_tax = args.reference_dir / "cleaned_reference.tax.tsv"
     args.cleaned_ref_db = args.reference_dir / "cleaned_reference_db"
