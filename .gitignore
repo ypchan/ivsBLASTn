@@ -1,0 +1,35 @@
+__pycache__/
+.agents/
+.codex/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+dist/
+build/
+
+# Runtime outputs
+reference/
+blast/
+results/
+*.blastn.tsv
+*.summary.tsv
+*.supporting_hsps.tsv
+*.intron_free.fa
+*.intron_free.fa.gz
+*.introns.fa
+*.introns.fa.gz
+*.exons.bed
+*.introns.bed
+*.report.md
+
+# BLAST database files
+*.nhr
+*.nin
+*.nsq
+*.ndb
+*.not
+*.ntf
+*.nto
