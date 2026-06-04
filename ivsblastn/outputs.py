@@ -176,6 +176,8 @@ def write_report(path: Path, results: List[QueryResult], args: argparse.Namespac
     counts = Counter(r.confidence for r in results)
     class_counts = Counter(r.classification for r in results)
     intron_lens = [r.intron_len for r in results if r.intron_len > 0]
+    candidates = [r for r in results if r.intron_start and r.intron_end]
+    output_candidates = [r for r in results if is_intron_result(r, args.min_output_confidence)]
 
     with path.open("wt", encoding="utf-8") as handle:
         print("# ivsBLASTn report", file=handle)
@@ -229,6 +231,8 @@ def write_report(path: Path, results: List[QueryResult], args: argparse.Namespac
         print("## Summary", file=handle)
         print("", file=handle)
         print(f"- Total query results: `{len(results)}`", file=handle)
+        print(f"- Candidate IVSs detected: `{len(candidates)}`", file=handle)
+        print(f"- Candidate IVSs passing `{args.min_output_confidence}` output threshold: `{len(output_candidates)}`", file=handle)
         for label in ["HIGH", "MEDIUM", "LOW", "NONE"]:
             print(f"- {label}: `{counts.get(label, 0)}`", file=handle)
         print("", file=handle)
@@ -255,6 +259,8 @@ def print_summary(results: List[QueryResult], args: argparse.Namespace) -> None:
     """Print terminal summary."""
 
     counts = Counter(r.confidence for r in results)
+    candidates = sum(1 for r in results if r.intron_start and r.intron_end)
+    output_candidates = sum(1 for r in results if is_intron_result(r, args.min_output_confidence))
     table = Table(title="ivsBLASTn summary")
     table.add_column("Metric", style="bold")
     table.add_column("Value", justify="right")
@@ -263,6 +269,8 @@ def print_summary(results: List[QueryResult], args: argparse.Namespace) -> None:
     table.add_row("Medium confidence", f"{counts.get('MEDIUM', 0):,}")
     table.add_row("Low confidence", f"{counts.get('LOW', 0):,}")
     table.add_row("No signal", f"{counts.get('NONE', 0):,}")
+    table.add_row("Candidate IVSs detected", f"{candidates:,}")
+    table.add_row(f"IVSs written/removed (>= {args.min_output_confidence})", f"{output_candidates:,}")
     table.add_row("Summary TSV", str(args.summary_tsv))
     table.add_row("Intron-free FASTA", str(args.intron_free_fa))
     table.add_row("Introns FASTA", str(args.introns_fa))

@@ -3,8 +3,9 @@ from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
 
+from ivsblastn.algorithm import is_intron_result
 from ivsblastn.models import QueryResult
-from ivsblastn.outputs import write_report
+from ivsblastn.outputs import write_fasta_outputs, write_report
 
 
 class OutputTests(unittest.TestCase):
@@ -49,6 +50,71 @@ class OutputTests(unittest.TestCase):
 
             text = report.read_text(encoding="utf-8")
             self.assertIn("`blast_max_hsps`: `NA`", text)
+            self.assertIn("Candidate IVSs detected: `0`", text)
+            self.assertIn("Candidate IVSs passing `LOW` output threshold: `0`", text)
+
+    def test_intron_result_threshold_controls_fasta_removal(self) -> None:
+        low = QueryResult(
+            query_id="q1",
+            query_len=10,
+            classification="LOW_CONFIDENCE_16S_INTRON",
+            confidence="LOW",
+            intron_start=4,
+            intron_end=6,
+            intron_len=3,
+            exon1_start=1,
+            exon1_end=3,
+            exon2_start=7,
+            exon2_end=10,
+        )
+        high = QueryResult(
+            query_id="q2",
+            query_len=10,
+            classification="HIGH_CONFIDENCE_16S_INTRON",
+            confidence="HIGH",
+            intron_start=4,
+            intron_end=6,
+            intron_len=3,
+            exon1_start=1,
+            exon1_end=3,
+            exon2_start=7,
+            exon2_end=10,
+        )
+
+        self.assertTrue(is_intron_result(low, "LOW"))
+        self.assertFalse(is_intron_result(low, "MEDIUM"))
+        self.assertTrue(is_intron_result(high, "MEDIUM"))
+
+    def test_write_fasta_outputs_removes_passing_introns(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            args = SimpleNamespace(
+                intron_free_fa=tmp / "intron_free.fa",
+                introns_fa=tmp / "introns.fa",
+                min_output_confidence="LOW",
+            )
+            result = QueryResult(
+                query_id="q1",
+                query_len=10,
+                classification="HIGH_CONFIDENCE_16S_INTRON",
+                confidence="HIGH",
+                intron_start=4,
+                intron_end=6,
+                intron_len=3,
+                exon1_start=1,
+                exon1_end=3,
+                exon2_start=7,
+                exon2_end=10,
+            )
+
+            write_fasta_outputs(args, [result], {"q1": "AAACCCGGGG"})
+
+            free_text = args.intron_free_fa.read_text(encoding="utf-8")
+            intron_text = args.introns_fa.read_text(encoding="utf-8")
+            self.assertIn("action=removed", free_text)
+            self.assertIn("AAAGGGG", free_text)
+            self.assertIn(">q1|intron|4-6|len=3|confidence=HIGH", intron_text)
+            self.assertIn("CCC", intron_text)
 
 
 if __name__ == "__main__":

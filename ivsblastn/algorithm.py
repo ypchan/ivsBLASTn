@@ -202,3 +202,5 @@ def confidence_rank(label: str) -> int:
 
 def is_intron_result(result: QueryResult, min_confidence: str) -> bool:
     """Return True if a result passes output confidence threshold."""
+
+    return bool(result.intron_start and result.intron_end) and confidence_rank(result.confidence) >= confidence_rank(min_confidence)
