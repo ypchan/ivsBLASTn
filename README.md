@@ -35,7 +35,7 @@ Python dependencies are declared in `pyproject.toml`.
 ## Repository Layout
 
 ```text
-src/ivsblastn/
+ivsblastn/
   cli.py          command-line interface and workflow orchestration
   models.py       shared dataclasses
   fasta.py        FASTA, SILVA header, and species-name helpers
@@ -50,7 +50,7 @@ src/ivsblastn/
 The installed command is `ivsBLASTn`. The package can also be run as a module during development:
 
 ```bash
-PYTHONPATH=src python -m ivsblastn --help
+python -m ivsblastn --help
 ```
 
 ## Quick Start
@@ -168,5 +168,5 @@ See [ivsBLASTn_technical_doc.md](ivsBLASTn_technical_doc.md) for the full algori
 Run the current unit tests from a checkout:
 
 ```bash
-PYTHONPATH=src python -m unittest discover -s tests
+python -m unittest discover -s tests
 ```
