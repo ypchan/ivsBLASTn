@@ -13,11 +13,11 @@ In BLASTN output this appears as two HSPs on the query separated by a large quer
 
 ![ivsBLASTn system workflow](figures/detect_intron_workflow.png)
 
-Method diagrams:
+Method diagrams
 
-- [HSP-gap support geometry](figures/hsp_gap_support.png)
-- [Confidence scoring model](figures/confidence_model.png)
-- [Reference self-cleaning method](figures/reference_self_clean.png)
+![HSP-gap support geometry](figures/hsp_gap_support.png)
+![Confidence scoring model](figures/confidence_model.png)
+![Reference self-cleaning method](figures/reference_self_clean.png)
 
 ## Install
 
