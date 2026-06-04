@@ -71,7 +71,7 @@ def run_query_blastn(args: argparse.Namespace) -> Path:
         db=args.db,
         out_file=args.query_blast,
         args=args,
-        max_targets=args.blast_max_target_seqs,
+        max_targets=args.top_subjects,
         max_hsps=args.blast_max_hsps,
         label="BLASTN",
     )

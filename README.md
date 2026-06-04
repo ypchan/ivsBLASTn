@@ -145,8 +145,15 @@ The summary table reports per-query classification, IVS coordinates, confidence,
 - `--min-intron-len`: minimum query gap accepted as IVS, default `25`.
 - `--max-intron-len`: maximum query gap accepted as IVS, default `2000`.
 - `--max-ref-gap`: maximum absolute subject gap or overlap, default `30`.
-- `--top-subjects`: number of top subjects analyzed per query, default `100`.
+- `--top-subjects`: number of subjects requested from query BLASTN and analyzed per query, default `100`.
+- `--blast-max-hsps`: maximum HSPs requested per query-subject pair, default `5`.
 - `--threads`: Python worker threads and BLASTN `-num_threads`, default `4`.
+
+For query BLASTN runs, the maximum reported HSP count per query is bounded by:
+
+```text
+--top-subjects * --blast-max-hsps
+```
 
 ## Large Datasets
 

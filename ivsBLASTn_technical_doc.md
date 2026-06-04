@@ -407,14 +407,13 @@ The HSP filters and geometry filters happen before confidence assignment. Parame
 | `--clean-ref-introns` | off | `--ref-fasta` | Runs reference self-BLAST, detects candidate introns in reference records, removes passing candidates, and builds a cleaned reference DB for query BLAST. Recommended when rare intron-containing references may exist. |
 | `--ref-clean-min-confidence` | `LOW` | `--clean-ref-introns` | Minimum confidence required to remove a candidate intron from a reference record during self-cleaning. Use `MEDIUM` or `HIGH` if you want more conservative reference modification. |
 | `--ref-self-blast-max-target-seqs` | `100` | `--clean-ref-introns` | Value passed as BLASTN `-max_target_seqs` during reference self-BLAST. Increase this when the reference is large or when rare intron-bearing references need more comparison subjects. |
-| `--ref-self-blast-max-hsps` | `20` | `--clean-ref-introns` and query BLAST helper | Value passed as BLASTN `-max_hsps` during reference self-BLAST. Higher values allow more local HSPs per subject. |
+| `--ref-self-blast-max-hsps` | `20` | `--clean-ref-introns` | Value passed as BLASTN `-max_hsps` during reference self-BLAST. Higher values allow more local HSPs per subject. |
 | `--min-pident` | `75.0` | all modes | Minimum BLAST HSP percent identity. HSPs below this value are ignored before any intron geometry is evaluated. |
 | `--min-hsp-len` | `100` | all modes | Minimum HSP length in bp. Short HSPs are ignored because they can create unstable gap geometry. |
-| `--top-subjects` | `100` | all modes | Number of top subjects retained per query after ranking by total HSP bitscore. Increase this to reduce false negatives when the best subject may itself contain an intron. |
+| `--top-subjects` | `100` | all modes | Number of subjects requested from query BLASTN and retained per query after ranking by total HSP bitscore. Increase this to reduce false negatives when the best subject may itself contain an intron. |
 | `--makeblastdb-bin` | `makeblastdb` | `--ref-fasta` and `--clean-ref-introns` | Executable name or path for `makeblastdb`. Use this when BLAST+ is installed under a nonstandard path. |
 | `--blastn-bin` | `blastn` | `--db`, `--ref-fasta`, self-clean | Executable name or path for `blastn`. Use this when BLAST+ is installed under a nonstandard path. |
-| `--blast-max-target-seqs` | `100` | query BLAST | Value passed as BLASTN `-max_target_seqs` for query-vs-reference BLAST. Increase this when the reference may contain rare intron-bearing nearest neighbors and you want more near-best subjects. |
-| `--blast-max-hsps` | `20` | query BLAST | Value passed as BLASTN `-max_hsps` for query-vs-reference BLAST. Higher values allow more local HSPs per subject. |
+| `--blast-max-hsps` | `5` | query BLAST | Value passed as BLASTN `-max_hsps` for query-vs-reference BLAST. Query BLASTN uses `--top-subjects` as `-max_target_seqs`, so the maximum reported HSP count per query is bounded by `--top-subjects * --blast-max-hsps`. |
 | `--blast-task` | `blastn` | internal BLAST calls | BLASTN task. Allowed values are `blastn`, `megablast`, `dc-megablast`, and `blastn-short`. `blastn` is the general default. |
 | `--blast-evalue` | `1e-20` | internal BLAST calls | E-value threshold passed to BLASTN. If supplied as an empty/false value in the runtime environment, the script does not add `-evalue`. |
 
@@ -631,7 +630,6 @@ ivsBLASTn \
   --clean-ref-introns \
   --ref-clean-min-confidence LOW \
   --ref-self-blast-max-target-seqs 300 \
-  --blast-max-target-seqs 300 \
   --top-subjects 300 \
   --gzip-fasta-output \
   --threads 8

@@ -67,11 +67,10 @@ def build_parser() -> argparse.ArgumentParser:
     filters.add_argument("--ref-self-blast-max-hsps", default=20, type=positive_int, help="Reference self-BLAST -max_hsps. Default: 20.")
     filters.add_argument("--min-pident", default=75.0, type=probability_percent, help="Minimum HSP percent identity. Default: 75.0.")
     filters.add_argument("--min-hsp-len", default=100, type=positive_int, help="Minimum HSP length in bp. Default: 100.")
-    filters.add_argument("--top-subjects", default=100, type=positive_int, help="Top subjects retained per query after parsing BLAST. Default: 100.")
+    filters.add_argument("--top-subjects", default=100, type=positive_int, help="Subjects requested from query BLASTN and retained per query after parsing. Default: 100.")
     filters.add_argument("--makeblastdb-bin", default="makeblastdb", help="makeblastdb executable. Default: makeblastdb.")
     filters.add_argument("--blastn-bin", default="blastn", help="blastn executable. Default: blastn.")
-    filters.add_argument("--blast-max-target-seqs", default=100, type=positive_int, help="Query BLASTN -max_target_seqs. Default: 100.")
-    filters.add_argument("--blast-max-hsps", default=20, type=positive_int, help="Query BLASTN -max_hsps. Default: 20.")
+    filters.add_argument("--blast-max-hsps", default=5, type=positive_int, help="Query BLASTN -max_hsps per subject. Default: 5.")
     filters.add_argument("--blast-task", default="blastn", choices=["blastn", "megablast", "dc-megablast", "blastn-short"], help="BLASTN task. Default: blastn.")
     filters.add_argument("--blast-evalue", default="1e-20", help="BLASTN e-value. Default: 1e-20.")
 

@@ -211,7 +211,6 @@ def write_report(path: Path, results: List[QueryResult], args: argparse.Namespac
             "ref_clean_min_confidence",
             "ref_self_blast_max_target_seqs",
             "ref_self_blast_max_hsps",
-            "blast_max_target_seqs",
             "blast_max_hsps",
             "blast_task",
             "blast_evalue",
