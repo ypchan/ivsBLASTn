@@ -183,11 +183,13 @@ class ReferenceSelectionTests(unittest.TestCase):
                 ref_fasta=Path(tmpdir) / "reference.fa",
                 outdir=Path(tmpdir) / "prepared",
                 ref_self_blast_max_hsps=20,
+                ref_clean_min_confidence="MEDIUM",
             )
 
             setup_reference_output_paths(args)
 
             self.assertEqual(args.blast_max_hsps, 20)
+            self.assertEqual(args.min_output_confidence, "MEDIUM")
             self.assertEqual(args.ref_self_clean_introns_fa, Path(tmpdir) / "prepared" / "results" / "reference_self_clean.introns.fa")
 
     def test_write_reference_introns_fasta_outputs_removed_reference_ivs(self) -> None:
