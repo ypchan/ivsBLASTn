@@ -51,6 +51,23 @@ def concatenate_text_files(files: Iterable[Path], output: Path, keep_one_header:
     return written
 
 
+def concatenate_binary_files(files: Iterable[Path], output: Path) -> int:
+    """Concatenate binary files and return the number of files written."""
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    written = 0
+    with output.open("wb") as out:
+        for path in files:
+            with path.open("rb") as handle:
+                while True:
+                    chunk = handle.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    out.write(chunk)
+            written += 1
+    return written
+
+
 def merge_chunk_outputs(chunk_results_dir: Path, outdir: Path, label: str = "merged") -> List[Path]:
     """Merge standard ivsBLASTn per-chunk outputs into a final output directory."""
 
@@ -63,10 +80,11 @@ def merge_chunk_outputs(chunk_results_dir: Path, outdir: Path, label: str = "mer
         files = list(iter_files_by_suffix(chunk_dirs, suffix))
         if not files:
             continue
-        if suffix.endswith(".gz"):
-            LOG.warning("Skipping gzip merge for %s; rerun chunks without --gzip-fasta-output for direct merge", suffix)
-            continue
         output = final_results / f"{label}{suffix}"
+        if suffix.endswith(".gz"):
+            concatenate_binary_files(files, output)
+            outputs.append(output)
+            continue
         keep_one_header = suffix in {".summary.tsv", ".supporting_hsps.tsv"}
         concatenate_text_files(files, output, keep_one_header=keep_one_header)
         outputs.append(output)

@@ -4,7 +4,7 @@ import re
 import shlex
 import subprocess
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional, Sequence
 
 from .logging import LOG
 
@@ -24,6 +24,7 @@ def render_slurm_array_script(
     partition: Optional[str],
     array_concurrency: Optional[int],
     extra_run_args: str,
+    run_args: Optional[Sequence[str]] = None,
 ) -> str:
     """Render a Slurm array script that runs one ivsBLASTn chunk per task."""
 
@@ -34,35 +35,60 @@ def render_slurm_array_script(
         raise ValueError(f"No chunks found in manifest: {manifest}")
     concurrency = f"%{array_concurrency}" if array_concurrency else ""
     partition_line = f"#SBATCH --partition={partition}\n" if partition else ""
-    db_arg = shlex.quote(str(db))
-    taxonomy_line = f"  --taxonomy {shlex.quote(str(taxonomy))} \\\n" if taxonomy else ""
-    blast_hsps_suffix = " \\" if extra_run_args else ""
-    extra_line = f"  {extra_run_args}\n" if extra_run_args else ""
+    manifest_arg = shlex.quote(str(manifest.resolve()))
+    outdir_abs = outdir.resolve()
+    outdir_arg = shlex.quote(str(outdir_abs))
+    db_arg = shlex.quote(str(db.resolve()))
+    command_lines: List[str] = [
+        "ivsBLASTn run",
+        '  --query "$CHUNK_FASTA"',
+        f"  --db {db_arg}",
+    ]
+    if taxonomy:
+        command_lines.append(f"  --taxonomy {shlex.quote(str(taxonomy.resolve()))}")
+    command_lines.extend(
+        [
+            '  --outdir "$CHUNK_OUTDIR"',
+            f"  --threads {threads}",
+            f"  --top-subjects {top_subjects}",
+            f"  --blast-max-hsps {blast_max_hsps}",
+        ]
+    )
+    for item in run_args or []:
+        command_lines.append(f"  {item}")
+
+    rendered_command = ""
+    if extra_run_args:
+        rendered_command = " \\\n".join(command_lines) + " \\\n" + f"  {extra_run_args}\n"
+    else:
+        rendered_command = " \\\n".join(command_lines) + "\n"
+
     return f"""#!/usr/bin/env bash
 #SBATCH --job-name=ivsBLASTn
 #SBATCH --cpus-per-task={cpus_per_task}
 #SBATCH --mem={mem}
 #SBATCH --time={time}
-{partition_line}#SBATCH --output={outdir}/slurm/logs/%A_%a.out
-#SBATCH --error={outdir}/slurm/logs/%A_%a.err
+{partition_line}#SBATCH --output={outdir_abs}/slurm/logs/%A_%a.out
+#SBATCH --error={outdir_abs}/slurm/logs/%A_%a.err
 #SBATCH --array=1-{chunk_count}{concurrency}
 
 set -euo pipefail
 
-MANIFEST=\"{manifest}\"
-CHUNK_FASTA=$(awk -v task_id=\"${{SLURM_ARRAY_TASK_ID}}\" 'NR == task_id + 1 {{print $2}}' \"$MANIFEST\")
-CHUNK_NAME=$(basename \"$CHUNK_FASTA\" .fa)
-CHUNK_OUTDIR=\"{outdir}/chunks/${{CHUNK_NAME}}\"
+MANIFEST={manifest_arg}
+CHUNK_FASTA=$(awk -F '\\t' -v task_id=\"${{SLURM_ARRAY_TASK_ID}}\" 'NR == task_id + 1 {{print $2}}' \"$MANIFEST\")
+if [[ -z \"$CHUNK_FASTA\" ]]; then
+  echo \"No chunk FASTA found for task ${{SLURM_ARRAY_TASK_ID}} in $MANIFEST\" >&2
+  exit 2
+fi
 
-ivsBLASTn run \\
-  --query \"$CHUNK_FASTA\" \\
-  --db {db_arg} \\
-{taxonomy_line}\
-  --outdir \"$CHUNK_OUTDIR\" \\
-  --threads {threads} \\
-  --top-subjects {top_subjects} \\
-  --blast-max-hsps {blast_max_hsps}{blast_hsps_suffix}
-{extra_line}\
+CHUNK_BASE=$(basename \"$CHUNK_FASTA\")
+CHUNK_NAME=\"${{CHUNK_BASE%.gz}}\"
+CHUNK_NAME=\"${{CHUNK_NAME%.fasta}}\"
+CHUNK_NAME=\"${{CHUNK_NAME%.fa}}\"
+CHUNK_NAME=\"${{CHUNK_NAME%.fna}}\"
+CHUNK_OUTDIR={outdir_arg}/chunks/${{CHUNK_NAME}}
+
+{rendered_command}\
 """
 
 

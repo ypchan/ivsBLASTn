@@ -26,6 +26,7 @@ from .taxonomy import parse_taxonomy
 
 
 SUBCOMMANDS = {"run", "init-reference", "split", "submit-slurm", "merge"}
+BLAST_DB_EXTENSIONS = (".nhr", ".nin", ".nsq", ".nal", ".ndb", ".njs", ".nog", ".nos", ".not", ".ntf", ".nto")
 
 
 def positive_int(value: str) -> int:
@@ -47,6 +48,47 @@ def probability_percent(value: str) -> float:
     if fvalue < 0 or fvalue > 100:
         raise argparse.ArgumentTypeError("Value must be between 0 and 100")
     return fvalue
+
+
+def blast_db_prefix_exists(prefix: Path) -> bool:
+    """Return True when files for a nucleotide BLAST DB prefix are present."""
+
+    return any(Path(str(prefix) + suffix).exists() for suffix in BLAST_DB_EXTENSIONS)
+
+
+def quoted_option(option: str, value: object) -> str:
+    """Render one CLI option/value pair for a shell script."""
+
+    return f"{option} {shlex.quote(str(value))}"
+
+
+def slurm_run_args(args: argparse.Namespace) -> List[str]:
+    """Return detection arguments forwarded from submit-slurm to each run task."""
+
+    forwarded = [
+        ("--algorithm", args.algorithm),
+        ("--min-pident", args.min_pident),
+        ("--min-hsp-len", args.min_hsp_len),
+        ("--min-intron-len", args.min_intron_len),
+        ("--max-intron-len", args.max_intron_len),
+        ("--max-ref-gap", args.max_ref_gap),
+        ("--max-query-overlap", args.max_query_overlap),
+        ("--breakpoint-window", args.breakpoint_window),
+        ("--blastn-bin", args.blastn_bin),
+        ("--blast-task", args.blast_task),
+        ("--blast-evalue", args.blast_evalue),
+        ("--tax-rank", args.tax_rank),
+        ("--min-support-subjects", args.min_support_subjects),
+        ("--medium-support-subjects", args.medium_support_subjects),
+        ("--medium-support-taxa", args.medium_support_taxa),
+        ("--high-support-subjects", args.high_support_subjects),
+        ("--high-support-taxa", args.high_support_taxa),
+        ("--min-output-confidence", args.min_output_confidence),
+    ]
+    rendered = [quoted_option(option, value) for option, value in forwarded]
+    if args.gzip_fasta_output:
+        rendered.append("--gzip-fasta-output")
+    return rendered
 
 
 def add_common_logging_args(parser: argparse.ArgumentParser) -> None:
@@ -169,6 +211,25 @@ def build_parser() -> argparse.ArgumentParser:
     submit_parser.add_argument("--threads", default=8, type=positive_int, help="Threads passed to each ivsBLASTn run. Default: 8.")
     submit_parser.add_argument("--top-subjects", default=100, type=positive_int, help="Subjects requested and analyzed per query. Default: 100.")
     submit_parser.add_argument("--blast-max-hsps", default=5, type=positive_int, help="HSPs requested per query-subject pair. Default: 5.")
+    submit_parser.add_argument("--algorithm", default="hsp-gap-support", choices=["hsp-gap-support"], help="Detection algorithm forwarded to each run. Default: hsp-gap-support.")
+    submit_parser.add_argument("--min-pident", default=75.0, type=probability_percent, help="Minimum HSP percent identity forwarded to each run. Default: 75.0.")
+    submit_parser.add_argument("--min-hsp-len", default=100, type=positive_int, help="Minimum HSP length forwarded to each run. Default: 100.")
+    submit_parser.add_argument("--min-intron-len", default=25, type=nonnegative_int, help="Minimum query gap size forwarded to each run. Default: 25 bp.")
+    submit_parser.add_argument("--max-intron-len", default=2000, type=positive_int, help="Maximum query gap size forwarded to each run. Default: 2000 bp.")
+    submit_parser.add_argument("--max-ref-gap", default=30, type=nonnegative_int, help="Maximum absolute reference gap/overlap forwarded to each run. Default: 30 bp.")
+    submit_parser.add_argument("--max-query-overlap", default=20, type=nonnegative_int, help="Maximum allowed query HSP overlap forwarded to each run. Default: 20 bp.")
+    submit_parser.add_argument("--breakpoint-window", default=30, type=nonnegative_int, help="Breakpoint clustering window forwarded to each run. Default: 30 bp.")
+    submit_parser.add_argument("--blastn-bin", default="blastn", help="blastn executable forwarded to each run. Default: blastn.")
+    submit_parser.add_argument("--blast-task", default="blastn", choices=["blastn", "megablast", "dc-megablast", "blastn-short"], help="BLASTN task forwarded to each run. Default: blastn.")
+    submit_parser.add_argument("--blast-evalue", default="1e-20", help="BLASTN e-value forwarded to each run. Default: 1e-20.")
+    submit_parser.add_argument("--tax-rank", default="genus", choices=["domain", "phylum", "class", "order", "family", "genus", "species"], help="Taxonomic rank forwarded to each run. Default: genus.")
+    submit_parser.add_argument("--min-support-subjects", default=1, type=positive_int, help="Minimum subjects for LOW confidence forwarded to each run. Default: 1.")
+    submit_parser.add_argument("--medium-support-subjects", default=3, type=positive_int, help="Minimum subjects for MEDIUM confidence forwarded to each run. Default: 3.")
+    submit_parser.add_argument("--medium-support-taxa", default=3, type=positive_int, help="Minimum taxa for MEDIUM confidence forwarded to each run. Default: 3.")
+    submit_parser.add_argument("--high-support-subjects", default=10, type=positive_int, help="Minimum subjects for HIGH confidence forwarded to each run. Default: 10.")
+    submit_parser.add_argument("--high-support-taxa", default=3, type=positive_int, help="Minimum taxa for HIGH confidence forwarded to each run. Default: 3.")
+    submit_parser.add_argument("--min-output-confidence", default="LOW", choices=["LOW", "MEDIUM", "HIGH"], help="Minimum confidence for FASTA/BED outputs forwarded to each run. Default: LOW.")
+    submit_parser.add_argument("--gzip-fasta-output", action="store_true", help="Write per-chunk FASTA outputs as .fa.gz and merge them as gzip streams. Default: disabled.")
     submit_parser.add_argument("--cpus-per-task", default=8, type=positive_int, help="Slurm CPUs per array task. Default: 8.")
     submit_parser.add_argument("--mem", default="16G", help="Slurm memory per task. Default: 16G.")
     submit_parser.add_argument("--time", default="12:00:00", help="Slurm time limit. Default: 12:00:00.")
@@ -364,6 +425,10 @@ def submit_slurm_command(args: argparse.Namespace) -> int:
     manifest = args.chunks_dir / "chunks.tsv"
     if not manifest.exists():
         raise FileNotFoundError(f"Chunk manifest not found: {manifest}")
+    if args.min_intron_len > args.max_intron_len:
+        raise ValueError("--min-intron-len must be <= --max-intron-len")
+    if not blast_db_prefix_exists(args.db):
+        LOG.warning("No BLAST DB files found for prefix on this filesystem: %s", args.db)
     if not args.taxonomy and "--taxonomy" not in args.extra_run_args:
         LOG.warning("No taxonomy TSV supplied; MEDIUM/HIGH confidence will be harder to reach")
     script = render_slurm_array_script(
@@ -380,6 +445,7 @@ def submit_slurm_command(args: argparse.Namespace) -> int:
         partition=args.partition,
         array_concurrency=args.array_concurrency,
         extra_run_args=args.extra_run_args,
+        run_args=slurm_run_args(args),
     )
     script_path = write_slurm_array_script(script, args.outdir)
     if args.submit:

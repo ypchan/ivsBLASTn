@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import heapq
 from statistics import median
 from typing import Dict, List, Optional, Tuple
 
@@ -83,8 +84,13 @@ def best_support_pair_for_subject(query_id: str, subject_id: str, hsps: List[HSP
 def top_subjects_by_bitscore(subject_hsps: Dict[str, List[HSP]], top_subjects: int) -> Dict[str, List[HSP]]:
     """Keep top subjects by summed HSP bitscore."""
 
-    ranked = sorted(subject_hsps.items(), key=lambda item: sum(h.bitscore for h in item[1]), reverse=True)
-    return dict(ranked[:top_subjects])
+    indexed_items = list(enumerate(subject_hsps.items()))
+    score = lambda item: (sum(h.bitscore for h in item[1][1]), -item[0])
+    if top_subjects >= len(subject_hsps):
+        ranked = sorted(indexed_items, key=score, reverse=True)
+    else:
+        ranked = heapq.nlargest(top_subjects, indexed_items, key=score)
+    return dict(item for _index, item in ranked)
 
 
 def cluster_support_pairs(pairs: List[SupportPair], breakpoint_window: int) -> List[List[SupportPair]]:
@@ -196,4 +202,3 @@ def confidence_rank(label: str) -> int:
 
 def is_intron_result(result: QueryResult, min_confidence: str) -> bool:
     """Return True if a result passes output confidence threshold."""
-

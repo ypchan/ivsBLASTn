@@ -10,8 +10,8 @@ from .algorithm import analyze_query, confidence_rank, is_intron_result
 from .blast import make_blast_db, parse_blast, run_blastn_to_file
 from .fasta import (
     clean_dna_sequence,
+    iter_fasta_records,
     is_strict_atgc,
-    open_text_auto,
     parse_silva_header,
     read_fasta,
     species_key_from_taxonomy,
@@ -35,61 +35,48 @@ def preprocess_reference(args: argparse.Namespace) -> Tuple[Path, Path, Path]:
     skipped_species_cap = 0
     skipped_non_atgc = 0
     skipped_empty = 0
-    record_order = 0
-    current_header = ""
-    current_seq: List[str] = []
 
-    with open_text_auto(args.ref_fasta) as ref_in:
-        def flush_record() -> None:
-            nonlocal eligible, skipped_domain, skipped_unclear_species, skipped_non_atgc, skipped_empty, record_order, current_header, current_seq
-            if not current_header:
-                return
-            seq_id, taxonomy = parse_silva_header(current_header)
-            record_order += 1
+    def keep_selected_record(record: ReferenceRecord, species_key: str) -> None:
+        selected = selected_by_species[species_key]
+        selected.append(record)
+        selected.sort(key=lambda r: (-len(r.seq), r.order))
+        del selected[args.ref_per_species :]
+
+    with args.raw_ref_fa.open("wt", encoding="utf-8") as fa_out, args.raw_ref_tax.open("wt", encoding="utf-8", newline="") as tax_file:
+        tax_writer = csv.writer(tax_file, delimiter=chr(9), lineterminator=chr(10))
+        for record_order, (_record_id, description, raw_seq) in enumerate(iter_fasta_records(args.ref_fasta), start=1):
+            seq_id, taxonomy = parse_silva_header(description)
             domain = taxonomy_domain(taxonomy)
             if domain not in allowed_domains:
                 skipped_domain += 1
-                return
-            seq = clean_dna_sequence(current_seq)
+                continue
+            seq = clean_dna_sequence([raw_seq])
             if not seq:
                 skipped_empty += 1
-                return
+                continue
             if not is_strict_atgc(seq):
                 skipped_non_atgc += 1
-                return
+                continue
             species_key = species_key_from_taxonomy(taxonomy)
             if species_key is None:
                 skipped_unclear_species += 1
-                return
+                continue
             eligible += 1
             record = ReferenceRecord(order=record_order, seq_id=seq_id, taxonomy=taxonomy, seq=seq)
-            selected = selected_by_species[species_key]
-            selected.append(record)
-            if args.ref_per_species > 0:
-                selected.sort(key=lambda r: (-len(r.seq), r.order))
-                del selected[args.ref_per_species :]
-
-        for raw in ref_in:
-            line = raw.strip()
-            if not line:
-                continue
-            if line.startswith(">"):
-                flush_record()
-                current_header = line
-                current_seq = []
+            if args.ref_per_species == 0:
+                write_fasta_record(fa_out, record.seq_id, record.seq)
+                tax_writer.writerow([record.seq_id, record.taxonomy])
             else:
-                current_seq.append(line)
-        flush_record()
+                keep_selected_record(record, species_key)
 
-    selected_records = sorted((record for records in selected_by_species.values() for record in records), key=lambda r: r.order)
-    kept = len(selected_records)
-    skipped_species_cap = eligible - kept
-    with args.raw_ref_fa.open("wt", encoding="utf-8") as fa_out, args.raw_ref_tax.open("wt", encoding="utf-8", newline="") as tax_file:
-        tax_writer = csv.writer(tax_file, delimiter=chr(9), lineterminator=chr(10))
-        for record in selected_records:
-            write_fasta_record(fa_out, record.seq_id, record.seq)
-            tax_writer.writerow([record.seq_id, record.taxonomy])
+        if args.ref_per_species > 0:
+            selected_records = sorted((record for records in selected_by_species.values() for record in records), key=lambda r: r.order)
+            skipped_species_cap = eligible - len(selected_records)
+            for record in selected_records:
+                write_fasta_record(fa_out, record.seq_id, record.seq)
+                tax_writer.writerow([record.seq_id, record.taxonomy])
 
+    kept = eligible - skipped_species_cap
     LOG.info("Reference preprocessing kept %s sequences", kept)
     LOG.info("Skipped by domain filter: %s", skipped_domain)
     LOG.info("Skipped by unclear species name: %s", skipped_unclear_species)

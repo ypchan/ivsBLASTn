@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 import unittest
 
-from ivsblastn.fasta import species_key_from_taxonomy
+from ivsblastn.fasta import read_fasta, species_key_from_taxonomy
 from ivsblastn.cli import init_reference_command
 from ivsblastn.reference import preprocess_reference
 
@@ -18,6 +18,16 @@ class ReferenceSelectionTests(unittest.TestCase):
         self.assertIsNone(species_key_from_taxonomy("Bacteria;P;C;O;F;Vibrio;Vibrio"))
         self.assertIsNone(species_key_from_taxonomy("Bacteria;P;C;O;F;Vibrio;Vibrio 1234"))
         self.assertIsNone(species_key_from_taxonomy("Bacteria;P;C;O;F;Vibrio;Vibrio sp001"))
+        self.assertIsNone(species_key_from_taxonomy("Bacteria;P;C;O;F;Vibrio;Vibrio sp."))
+        self.assertIsNone(species_key_from_taxonomy("Bacteria;P;C;O;F;Vibrio;Vibrio cf."))
+
+    def test_read_fasta_rejects_duplicate_ids(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            fasta = Path(tmpdir) / "query.fa"
+            fasta.write_text(">q1\nAAAA\n>q1 duplicate\nCCCC\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "Duplicate FASTA sequence ID"):
+                read_fasta(fasta)
 
     def test_preprocess_reference_keeps_longest_record_per_species(self) -> None:
         with TemporaryDirectory() as tmpdir:

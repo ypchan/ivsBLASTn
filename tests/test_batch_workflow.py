@@ -1,5 +1,6 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
+import gzip
 import unittest
 
 from ivsblastn.merge import merge_chunk_outputs
@@ -36,6 +37,23 @@ class BatchWorkflowTests(unittest.TestCase):
             self.assertIn("q1\tNONE", merged)
             self.assertIn("q2\tNONE", merged)
 
+    def test_merge_concatenates_gzip_fasta_outputs(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            for chunk_name, query_id in [("query.000001", "q1"), ("query.000002", "q2")]:
+                results = tmp / "chunks" / chunk_name / "results"
+                results.mkdir(parents=True)
+                with gzip.open(results / f"{chunk_name}.intron_free.fa.gz", "wt", encoding="utf-8") as handle:
+                    handle.write(f">{query_id}\nAAAA\n")
+
+            merge_chunk_outputs(tmp / "chunks", tmp / "final", label="all")
+            merged_path = tmp / "final" / "results" / "all.intron_free.fa.gz"
+
+            with gzip.open(merged_path, "rt", encoding="utf-8") as handle:
+                merged = handle.read()
+            self.assertIn(">q1", merged)
+            self.assertIn(">q2", merged)
+
     def test_slurm_script_uses_manifest_chunk_count(self) -> None:
         with TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
@@ -57,11 +75,15 @@ class BatchWorkflowTests(unittest.TestCase):
                 partition=None,
                 array_concurrency=10,
                 extra_run_args="--min-pident 80",
+                run_args=["--max-ref-gap 12", "--min-output-confidence MEDIUM"],
             )
 
             self.assertIn("#SBATCH --array=1-2%10", script)
             self.assertIn("ivsBLASTn run", script)
             self.assertIn("--min-pident 80", script)
+            self.assertIn("--max-ref-gap 12", script)
+            self.assertIn("--min-output-confidence MEDIUM", script)
+            self.assertIn("awk -F '\\t'", script)
 
 
 if __name__ == "__main__":

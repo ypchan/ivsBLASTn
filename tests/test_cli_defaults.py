@@ -39,6 +39,25 @@ class CliDefaultTests(unittest.TestCase):
         self.assertEqual(args.ref_per_species, 1)
         self.assertFalse(args.clean_ref_introns)
 
+    def test_submit_slurm_forwards_detection_defaults(self) -> None:
+        args = build_parser().parse_args(
+            [
+                "submit-slurm",
+                "--chunks-dir",
+                "chunks",
+                "--db",
+                "reference_db",
+                "--outdir",
+                "batch",
+            ]
+        )
+
+        self.assertEqual(args.min_pident, 75.0)
+        self.assertEqual(args.min_hsp_len, 100)
+        self.assertEqual(args.max_ref_gap, 30)
+        self.assertEqual(args.min_output_confidence, "LOW")
+        self.assertFalse(args.gzip_fasta_output)
+
 
 if __name__ == "__main__":
     unittest.main()

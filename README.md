@@ -87,6 +87,7 @@ ivsBLASTn run ... \
 
 ```text
 ivsBLASTn run           Run IVS detection on one query FASTA or one chunk
+ivsBLASTn init-reference Prepare reusable reference FASTA, taxonomy TSV, and BLAST DB
 ivsBLASTn split         Split a large query FASTA into chunks
 ivsBLASTn submit-slurm  Generate and optionally submit a Slurm array job
 ivsBLASTn merge         Merge per-chunk outputs
@@ -333,6 +334,8 @@ ivsBLASTn submit-slurm \
   --array-concurrency 40
 ```
 
+Detection parameters such as `--min-pident`, `--min-hsp-len`, `--min-intron-len`, `--max-ref-gap`, confidence thresholds, `--blast-task`, and `--blast-evalue` can be passed directly to `submit-slurm`. They are forwarded to every `ivsBLASTn run` array task, so local and Slurm runs can use the same thresholds.
+
 Review:
 
 ```text
@@ -396,7 +399,7 @@ batch01/final/results/
   all_16s.merge_report.md
 ```
 
-Do not use `--gzip-fasta-output` for chunk runs if you want direct FASTA merging.
+Compressed chunk FASTA outputs are supported. If chunk runs use `--gzip-fasta-output`, `ivsBLASTn merge` writes merged `.fa.gz` files by concatenating valid gzip streams.
 
 ## Large Reference Data Strategy
 

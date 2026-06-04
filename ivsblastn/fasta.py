@@ -78,6 +78,8 @@ def read_fasta(path: Path) -> Dict[str, str]:
                 continue
             if line.startswith(">"):
                 current_id = line[1:].split()[0]
+                if current_id in seqs:
+                    raise ValueError(f"Duplicate FASTA sequence ID: {current_id}")
                 seqs[current_id] = []
             elif current_id is not None:
                 seqs[current_id].append(line)
@@ -113,6 +115,23 @@ def species_key_from_taxonomy(taxonomy: str) -> Optional[str]:
         return None
     species_epithet = species_words[1]
     if any(char.isdigit() for char in species_epithet):
+        return None
+    unclear_epithets = {
+        "aff",
+        "aff.",
+        "cf",
+        "cf.",
+        "sp",
+        "sp.",
+        "spp",
+        "spp.",
+        "bacterium",
+        "archaeon",
+        "uncultured",
+        "unclassified",
+        "unidentified",
+    }
+    if species_epithet.lower() in unclear_epithets:
         return None
     return ";".join(parts[:6] + [" ".join(species_words[:2])])
 
