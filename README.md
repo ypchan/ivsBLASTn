@@ -11,13 +11,13 @@ subject:  exon-left  nearly continuous exon-right
 
 In BLASTN output this appears as two HSPs on the query separated by a large query gap, while the subject-side coordinates remain adjacent or nearly adjacent.
 
-![ivsBLASTn system workflow](figures/detect_intron_workflow.svg)
+![ivsBLASTn system workflow](figures/detect_intron_workflow.png)
 
 Method diagrams:
 
-- [HSP-gap support geometry](figures/hsp_gap_support.svg)
-- [Confidence scoring model](figures/confidence_model.svg)
-- [Reference self-cleaning method](figures/reference_self_clean.svg)
+- [HSP-gap support geometry](figures/hsp_gap_support.png)
+- [Confidence scoring model](figures/confidence_model.png)
+- [Reference self-cleaning method](figures/reference_self_clean.png)
 
 ## Install
 
@@ -397,6 +397,128 @@ batch01/final/results/
 ```
 
 Do not use `--gzip-fasta-output` for chunk runs if you want direct FASTA merging.
+
+## Large Reference Data Strategy
+
+Large references need a different strategy from large query files. Query splitting is simple because each query is classified independently. Reference splitting is more delicate because `--top-subjects`, taxonomic support, and nearest-neighbor evidence depend on the complete reference search space.
+
+The safe strategy is to parallelize reference work in stages.
+
+### Stage A: Parallel Reference Selection
+
+Reference selection is based on:
+
+```text
+domain filter
+clear species name filter
+ATGC-only filter
+longest N records per species
+```
+
+The "longest N per species" rule is composable, so it can be parallelized exactly:
+
+```text
+raw SILVA FASTA
+  -> split raw reference FASTA into shards
+  -> each shard keeps local longest N per species
+  -> concatenate local candidate records
+  -> reduce again to global longest N per species
+  -> build raw_reference.fa and raw_reference.tax.tsv
+```
+
+This is a true map-reduce operation. It is safe because the global top N longest records for a species must be present in the union of each shard's local top N records for that species.
+
+This is the recommended future optimization for very large SILVA-style FASTA files. It should be implemented as a dedicated reference-preparation workflow rather than by sharding the final BLAST database.
+
+### Stage B: Build One Global Reference DB
+
+After global reference selection, build one complete BLAST database:
+
+```bash
+makeblastdb \
+  -in raw_reference.fa \
+  -dbtype nucl \
+  -out raw_reference_db
+```
+
+Do not build independent reference-shard databases for the final query search unless you also implement a second-stage global top-subject reduction. Otherwise each query's best subjects may be split across shards, and confidence support can be biased.
+
+### Stage C: Parallel Reference Self-Cleaning
+
+Reference self-cleaning treats reference records as queries against the complete reference DB. That means the query side of self-cleaning can be split safely:
+
+```text
+raw_reference.fa
+  -> split into reference-query chunks
+  -> Slurm array: each chunk vs raw_reference_db
+  -> each chunk detects reference IVSs
+  -> concatenate chunk intron_free.fa files
+  -> build cleaned_reference_db
+```
+
+Conceptually:
+
+```bash
+ivsBLASTn split \
+  --query reference_silva_nr99/raw_reference.fa \
+  --chunks-dir refclean/chunks \
+  --chunk-size 5000 \
+  --chunk-prefix ref
+
+ivsBLASTn submit-slurm \
+  --chunks-dir refclean/chunks \
+  --db reference_silva_nr99/raw_reference_db \
+  --taxonomy reference_silva_nr99/raw_reference.tax.tsv \
+  --outdir refclean \
+  --threads 8 \
+  --cpus-per-task 8 \
+  --mem 16G \
+  --time 12:00:00 \
+  --array-concurrency 40 \
+  --extra-run-args "--min-output-confidence LOW"
+
+ivsBLASTn merge \
+  --chunk-results-dir refclean/chunks \
+  --outdir refclean/final \
+  --label cleaned_reference
+
+makeblastdb \
+  -in refclean/final/results/cleaned_reference.intron_free.fa \
+  -dbtype nucl \
+  -out refclean/cleaned_reference_db
+```
+
+Then use:
+
+```bash
+ivsBLASTn run \
+  --query query_16s.fa \
+  --db refclean/cleaned_reference_db \
+  --taxonomy reference_silva_nr99/raw_reference.tax.tsv \
+  --outdir ivs_run
+```
+
+This works because each reference record's self-clean decision is query-local, but every chunk still searches against the same complete raw reference DB.
+
+### What Not To Do
+
+Avoid this as a first strategy:
+
+```text
+split reference DB into DB_1, DB_2, DB_3
+query vs each DB shard
+merge final IVS calls directly
+```
+
+That is not equivalent to a global BLAST search. To make reference DB sharding exact, you would need:
+
+1. Query all reference shards.
+2. Merge raw BLAST HSPs per query.
+3. Re-rank subjects globally by bitscore.
+4. Keep global `--top-subjects`.
+5. Run IVS detection once on the globally reduced HSP set.
+
+This can be implemented, but it is more complex than query-side splitting and should only be used if one complete reference DB is too large for BLAST+ on your cluster.
 
 ## Interpreting Results
 
