@@ -92,12 +92,11 @@ def best_support_pair_for_subject(query_id: str, subject_id: str, hsps: List[HSP
 def top_subjects_by_bitscore(subject_hsps: Dict[str, List[HSP]], top_subjects: int) -> Dict[str, List[HSP]]:
     """Keep top subjects by summed HSP bitscore."""
 
+    if top_subjects >= len(subject_hsps):
+        return dict(subject_hsps)
     indexed_items = list(enumerate(subject_hsps.items()))
     score = lambda item: (sum(h.bitscore for h in item[1][1]), -item[0])
-    if top_subjects >= len(subject_hsps):
-        ranked = sorted(indexed_items, key=score, reverse=True)
-    else:
-        ranked = heapq.nlargest(top_subjects, indexed_items, key=score)
+    ranked = heapq.nlargest(top_subjects, indexed_items, key=score)
     return dict(item for _index, item in ranked)
 
 
@@ -362,11 +361,13 @@ def analyze_query_all(
 
     selected.sort(key=lambda r: (r.intron_start, r.intron_end))
     ivs_count = len(selected)
+    ivs_free_len = max(0, query_len - sum(result.intron_len for result in selected))
     results: List[QueryResult] = []
-    cluster_by_interval = {(result.intron_start, result.intron_end): result.support_pairs or [] for result in selected}
     for ivs_index, result in enumerate(selected, start=1):
-        cluster = cluster_by_interval[(result.intron_start, result.intron_end)]
-        results.append(cluster_to_result(query_id, query_len, cluster, stats, top_subjects, taxonomy, args, ivs_index, ivs_count))
+        cluster = result.support_pairs or []
+        final_result = cluster_to_result(query_id, query_len, cluster, stats, top_subjects, taxonomy, args, ivs_index, ivs_count)
+        final_result.intron_free_len = ivs_free_len
+        results.append(final_result)
     return results
 
 

@@ -2,7 +2,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from ivsblastn.cli import build_parser, normalize_legacy_argv, validate_run_args
+from ivsblastn.cli import build_parser, normalize_legacy_argv, slurm_run_args, validate_run_args
 
 
 class CliDefaultTests(unittest.TestCase):
@@ -44,6 +44,28 @@ class CliDefaultTests(unittest.TestCase):
         self.assertEqual(args.ref_clean_min_confidence, "MEDIUM")
         self.assertFalse(args.clean_ref_introns)
 
+    def test_ivs_named_options_keep_legacy_destinations(self) -> None:
+        args = build_parser().parse_args(
+            [
+                "run",
+                "--query",
+                "query.fa",
+                "--db",
+                "reference_db",
+                "--outdir",
+                "out",
+                "--clean-ref-ivs",
+                "--min-ivs-len",
+                "30",
+                "--max-ivs-len",
+                "1500",
+            ]
+        )
+
+        self.assertTrue(args.clean_ref_introns)
+        self.assertEqual(args.min_intron_len, 30)
+        self.assertEqual(args.max_intron_len, 1500)
+
     def test_submit_slurm_forwards_detection_defaults(self) -> None:
         args = build_parser().parse_args(
             [
@@ -63,6 +85,11 @@ class CliDefaultTests(unittest.TestCase):
         self.assertEqual(args.breakpoint_window, 20)
         self.assertEqual(args.min_output_confidence, "MEDIUM")
         self.assertFalse(args.gzip_fasta_output)
+
+        forwarded = "\n".join(slurm_run_args(args))
+        self.assertIn("--min-ivs-len 25", forwarded)
+        self.assertIn("--max-ivs-len 2000", forwarded)
+        self.assertIn("--min-output-confidence MEDIUM", forwarded)
 
     def test_run_validation_reports_missing_blast_db_prefix(self) -> None:
         with TemporaryDirectory() as tmpdir:

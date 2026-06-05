@@ -6,7 +6,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-from .algorithm import analyze_query_all, confidence_rank, is_intron_result
+from .algorithm import analyze_query_all, is_intron_result
 from .blast import make_blast_db, parse_blast_with_stats, run_blastn_to_file
 from .fasta import (
     clean_dna_sequence,
@@ -168,7 +168,6 @@ def clean_reference_introns(args: argparse.Namespace, ref_fa: Path, tax_tsv: Pat
                 ref_blast_stats_by_query.get(query_id),
             )
         )
-    ref_results.sort(key=lambda r: (confidence_rank(r.confidence), r.support_subjects, r.support_taxa, r.query_id), reverse=True)
     write_summary(output_path(args.ref_self_clean_prefix, ".summary.tsv"), ref_results, args.tax_rank)
     write_supporting_hsps(output_path(args.ref_self_clean_prefix, ".supporting_hsps.tsv"), ref_results)
     write_report(output_path(args.ref_self_clean_prefix, ".report.md"), ref_results, args)
@@ -177,7 +176,7 @@ def clean_reference_introns(args: argparse.Namespace, ref_fa: Path, tax_tsv: Pat
     for result in ref_results:
         if is_intron_result(result, args.ref_clean_min_confidence):
             remove_by_id[result.query_id].append(result)
-    removed_introns_fa = getattr(args, "ref_self_clean_introns_fa", output_path(args.ref_self_clean_prefix, ".introns.fa"))
+    removed_introns_fa = getattr(args, "ref_self_clean_introns_fa", output_path(args.ref_self_clean_prefix, ".ivs.fa"))
     removed_introns = write_reference_introns_fasta(removed_introns_fa, ref_seqs, ref_results, args.ref_clean_min_confidence)
     LOG.info("Reference sequences with candidate IVSs to remove: %s", len(remove_by_id))
     LOG.info("Reference IVS sequences written: %s", removed_introns)

@@ -11,7 +11,7 @@ from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn
 from rich_argparse import RichHelpFormatter
 
 from . import __version__
-from .algorithm import analyze_query_all, confidence_rank
+from .algorithm import analyze_query_all
 from .blast import parse_blast_with_stats, run_query_blastn
 from .fasta import read_fasta
 from .logging import CONSOLE, LOG, setup_logging
@@ -82,8 +82,8 @@ def slurm_run_args(args: argparse.Namespace) -> List[str]:
         ("--algorithm", args.algorithm),
         ("--min-pident", args.min_pident),
         ("--min-hsp-len", args.min_hsp_len),
-        ("--min-intron-len", args.min_intron_len),
-        ("--max-intron-len", args.max_intron_len),
+        ("--min-ivs-len", args.min_intron_len),
+        ("--max-ivs-len", args.max_intron_len),
         ("--max-ref-gap", args.max_ref_gap),
         ("--max-query-overlap", args.max_query_overlap),
         ("--breakpoint-window", args.breakpoint_window),
@@ -123,7 +123,7 @@ def add_run_args(parser: argparse.ArgumentParser) -> None:
     filters.add_argument("--ref-domains", default="Archaea,Bacteria", help="Comma-separated SILVA domains retained with --ref-fasta. Default: Archaea,Bacteria.")
     filters.add_argument("--ref-per-species", default=1, type=nonnegative_int, help="Maximum sequences per clear species in reference preprocessing, keeping the longest sequences first. Use 0 to disable. Default: 1.")
     filters.add_argument("--ref-unclear-per-genus", default=5, type=nonnegative_int, help="Maximum unclear-species records retained per genus, keeping the longest sequences first. Use 0 to skip all unclear species. Default: 5.")
-    filters.add_argument("--clean-ref-introns", action="store_true", help="Self-BLAST reference and remove candidate IVSs before query BLAST. Default: disabled.")
+    filters.add_argument("--clean-ref-ivs", "--clean-ref-introns", dest="clean_ref_introns", action="store_true", help="Self-BLAST reference and remove candidate IVSs before query BLAST. Default: disabled.")
     filters.add_argument("--ref-clean-min-confidence", default=DEFAULT_REF_CLEAN_MIN_CONFIDENCE, choices=["LOW", "MEDIUM", "HIGH"], help=f"Minimum confidence required to remove a reference IVS. Default: {DEFAULT_REF_CLEAN_MIN_CONFIDENCE}.")
     filters.add_argument("--ref-self-blast-max-target-seqs", default=DEFAULT_REF_SELF_BLAST_MAX_TARGET_SEQS, type=positive_int, help=f"Reference self-BLAST -max_target_seqs. Default: {DEFAULT_REF_SELF_BLAST_MAX_TARGET_SEQS}.")
     filters.add_argument("--ref-self-blast-max-hsps", default=DEFAULT_REF_SELF_BLAST_MAX_HSPS, type=positive_int, help=f"Reference self-BLAST -max_hsps. Default: {DEFAULT_REF_SELF_BLAST_MAX_HSPS}.")
@@ -137,8 +137,8 @@ def add_run_args(parser: argparse.ArgumentParser) -> None:
     filters.add_argument("--blast-evalue", default="1e-20", help="BLASTN e-value. Default: 1e-20.")
 
     intron = parser.add_argument_group("Candidate IVS geometry")
-    intron.add_argument("--min-intron-len", default=DEFAULT_MIN_INTRON_LEN, type=nonnegative_int, help=f"Minimum query gap size. Default: {DEFAULT_MIN_INTRON_LEN} bp.")
-    intron.add_argument("--max-intron-len", default=DEFAULT_MAX_INTRON_LEN, type=positive_int, help=f"Maximum query gap size. Default: {DEFAULT_MAX_INTRON_LEN} bp.")
+    intron.add_argument("--min-ivs-len", "--min-intron-len", dest="min_intron_len", metavar="MIN_IVS_LEN", default=DEFAULT_MIN_INTRON_LEN, type=nonnegative_int, help=f"Minimum query gap size. Default: {DEFAULT_MIN_INTRON_LEN} bp.")
+    intron.add_argument("--max-ivs-len", "--max-intron-len", dest="max_intron_len", metavar="MAX_IVS_LEN", default=DEFAULT_MAX_INTRON_LEN, type=positive_int, help=f"Maximum query gap size. Default: {DEFAULT_MAX_INTRON_LEN} bp.")
     intron.add_argument("--max-ref-gap", default=DEFAULT_MAX_REF_GAP, type=nonnegative_int, help=f"Maximum absolute reference gap/overlap. Default: {DEFAULT_MAX_REF_GAP} bp.")
     intron.add_argument("--max-query-overlap", default=DEFAULT_MAX_QUERY_OVERLAP, type=nonnegative_int, help=f"Maximum allowed query HSP overlap. Default: {DEFAULT_MAX_QUERY_OVERLAP} bp.")
     intron.add_argument("--breakpoint-window", default=DEFAULT_BREAKPOINT_WINDOW, type=nonnegative_int, help=f"Breakpoint clustering window. Default: {DEFAULT_BREAKPOINT_WINDOW} bp.")
@@ -187,7 +187,7 @@ def build_parser() -> argparse.ArgumentParser:
     init_selection.add_argument("--ref-unclear-per-genus", default=5, type=nonnegative_int, help="Maximum unclear-species records retained per genus, longest first. Use 0 to skip all unclear species. Default: 5.")
 
     init_self_clean = init_ref_parser.add_argument_group("Optional reference self-cleaning")
-    init_self_clean.add_argument("--clean-ref-introns", action="store_true", help="Self-BLAST reference and remove candidate IVSs before final DB creation.")
+    init_self_clean.add_argument("--clean-ref-ivs", "--clean-ref-introns", dest="clean_ref_introns", action="store_true", help="Self-BLAST reference and remove candidate IVSs before final DB creation.")
     init_self_clean.add_argument("--ref-clean-min-confidence", default=DEFAULT_REF_CLEAN_MIN_CONFIDENCE, choices=["LOW", "MEDIUM", "HIGH"], help=f"Minimum confidence required to remove a reference IVS. Default: {DEFAULT_REF_CLEAN_MIN_CONFIDENCE}.")
     init_self_clean.add_argument("--ref-self-blast-max-target-seqs", default=DEFAULT_REF_SELF_BLAST_MAX_TARGET_SEQS, type=positive_int, help=f"Reference self-BLAST -max_target_seqs. Default: {DEFAULT_REF_SELF_BLAST_MAX_TARGET_SEQS}.")
     init_self_clean.add_argument("--ref-self-blast-max-hsps", default=DEFAULT_REF_SELF_BLAST_MAX_HSPS, type=positive_int, help=f"Reference self-BLAST -max_hsps. Default: {DEFAULT_REF_SELF_BLAST_MAX_HSPS}.")
@@ -198,8 +198,8 @@ def build_parser() -> argparse.ArgumentParser:
     init_self_clean.add_argument("--tax-rank", default="genus", choices=["domain", "phylum", "class", "order", "family", "genus", "species"], help="Taxonomic rank used during optional self-cleaning. Default: genus.")
 
     init_geometry = init_ref_parser.add_argument_group("Self-cleaning IVS geometry")
-    init_geometry.add_argument("--min-intron-len", default=DEFAULT_MIN_INTRON_LEN, type=nonnegative_int, help=f"Minimum query gap size for optional self-cleaning. Default: {DEFAULT_MIN_INTRON_LEN} bp.")
-    init_geometry.add_argument("--max-intron-len", default=DEFAULT_MAX_INTRON_LEN, type=positive_int, help=f"Maximum query gap size for optional self-cleaning. Default: {DEFAULT_MAX_INTRON_LEN} bp.")
+    init_geometry.add_argument("--min-ivs-len", "--min-intron-len", dest="min_intron_len", metavar="MIN_IVS_LEN", default=DEFAULT_MIN_INTRON_LEN, type=nonnegative_int, help=f"Minimum query gap size for optional self-cleaning. Default: {DEFAULT_MIN_INTRON_LEN} bp.")
+    init_geometry.add_argument("--max-ivs-len", "--max-intron-len", dest="max_intron_len", metavar="MAX_IVS_LEN", default=DEFAULT_MAX_INTRON_LEN, type=positive_int, help=f"Maximum query gap size for optional self-cleaning. Default: {DEFAULT_MAX_INTRON_LEN} bp.")
     init_geometry.add_argument("--max-ref-gap", default=DEFAULT_MAX_REF_GAP, type=nonnegative_int, help=f"Maximum absolute reference gap/overlap for optional self-cleaning. Default: {DEFAULT_MAX_REF_GAP} bp.")
     init_geometry.add_argument("--max-query-overlap", default=DEFAULT_MAX_QUERY_OVERLAP, type=nonnegative_int, help=f"Maximum allowed query HSP overlap. Default: {DEFAULT_MAX_QUERY_OVERLAP} bp.")
     init_geometry.add_argument("--breakpoint-window", default=DEFAULT_BREAKPOINT_WINDOW, type=nonnegative_int, help=f"Breakpoint clustering window. Default: {DEFAULT_BREAKPOINT_WINDOW} bp.")
@@ -246,8 +246,8 @@ def build_parser() -> argparse.ArgumentParser:
     submit_detection.add_argument("--algorithm", default="hsp-gap-support", choices=["hsp-gap-support"], help="Detection algorithm forwarded to each run. Default: hsp-gap-support.")
     submit_detection.add_argument("--min-pident", default=DEFAULT_MIN_PIDENT, type=probability_percent, help=f"Minimum HSP percent identity forwarded to each run. Default: {DEFAULT_MIN_PIDENT}.")
     submit_detection.add_argument("--min-hsp-len", default=DEFAULT_MIN_HSP_LEN, type=positive_int, help=f"Minimum HSP length forwarded to each run. Default: {DEFAULT_MIN_HSP_LEN}.")
-    submit_detection.add_argument("--min-intron-len", default=DEFAULT_MIN_INTRON_LEN, type=nonnegative_int, help=f"Minimum query gap size forwarded to each run. Default: {DEFAULT_MIN_INTRON_LEN} bp.")
-    submit_detection.add_argument("--max-intron-len", default=DEFAULT_MAX_INTRON_LEN, type=positive_int, help=f"Maximum query gap size forwarded to each run. Default: {DEFAULT_MAX_INTRON_LEN} bp.")
+    submit_detection.add_argument("--min-ivs-len", "--min-intron-len", dest="min_intron_len", metavar="MIN_IVS_LEN", default=DEFAULT_MIN_INTRON_LEN, type=nonnegative_int, help=f"Minimum query gap size forwarded to each run. Default: {DEFAULT_MIN_INTRON_LEN} bp.")
+    submit_detection.add_argument("--max-ivs-len", "--max-intron-len", dest="max_intron_len", metavar="MAX_IVS_LEN", default=DEFAULT_MAX_INTRON_LEN, type=positive_int, help=f"Maximum query gap size forwarded to each run. Default: {DEFAULT_MAX_INTRON_LEN} bp.")
     submit_detection.add_argument("--max-ref-gap", default=DEFAULT_MAX_REF_GAP, type=nonnegative_int, help=f"Maximum absolute reference gap/overlap forwarded to each run. Default: {DEFAULT_MAX_REF_GAP} bp.")
     submit_detection.add_argument("--max-query-overlap", default=DEFAULT_MAX_QUERY_OVERLAP, type=nonnegative_int, help=f"Maximum allowed query HSP overlap forwarded to each run. Default: {DEFAULT_MAX_QUERY_OVERLAP} bp.")
     submit_detection.add_argument("--breakpoint-window", default=DEFAULT_BREAKPOINT_WINDOW, type=nonnegative_int, help=f"Breakpoint clustering window forwarded to each run. Default: {DEFAULT_BREAKPOINT_WINDOW} bp.")
@@ -327,7 +327,7 @@ def validate_run_args(args: argparse.Namespace) -> None:
     if args.taxonomy is not None and not args.taxonomy.exists():
         raise FileNotFoundError(f"Taxonomy table not found: {args.taxonomy}")
     if args.min_intron_len > args.max_intron_len:
-        raise ValueError("--min-intron-len must be <= --max-intron-len")
+        raise ValueError("--min-ivs-len must be <= --max-ivs-len")
 
 
 def run_pipeline(args: argparse.Namespace) -> int:
@@ -351,6 +351,18 @@ def run_pipeline(args: argparse.Namespace) -> int:
         seqs = read_fasta(args.query)
         progress.update(task, completed=1, total=1)
         LOG.info("Loaded query sequences: %s", len(seqs))
+        LOG.info(
+            "Detection settings: min_pident=%s min_hsp_len=%s top_subjects=%s blast_max_hsps=%s min_ivs_len=%s max_ivs_len=%s max_ref_gap=%s breakpoint_window=%s min_output_confidence=%s",
+            args.min_pident,
+            args.min_hsp_len,
+            args.top_subjects,
+            args.blast_max_hsps,
+            args.min_intron_len,
+            args.max_intron_len,
+            args.max_ref_gap,
+            args.breakpoint_window,
+            args.min_output_confidence,
+        )
 
         if args.ref_fasta is not None:
             task = progress.add_task("Preprocessing reference and building BLAST DB", total=None)
@@ -360,7 +372,7 @@ def run_pipeline(args: argparse.Namespace) -> int:
             progress.update(task, completed=1, total=1)
 
             if args.clean_ref_introns:
-                task = progress.add_task("Cleaning reference introns by self-BLAST", total=None)
+                task = progress.add_task("Cleaning reference IVSs by self-BLAST", total=None)
                 _, cleaned_taxonomy, cleaned_db = clean_reference_introns(args, generated_ref, generated_taxonomy, generated_db)
                 args.taxonomy = cleaned_taxonomy
                 args.db = cleaned_db
@@ -392,8 +404,6 @@ def run_pipeline(args: argparse.Namespace) -> int:
                 for query_results in executor.map(worker, query_ids, chunksize=256):
                     results.extend(query_results)
                     progress.advance(task)
-
-        results.sort(key=lambda r: (confidence_rank(r.confidence), r.support_subjects, r.support_taxa, r.query_id, -r.ivs_index), reverse=True)
 
         task = progress.add_task("Writing outputs", total=6)
         write_summary(args.summary_tsv, results, args.tax_rank)
@@ -429,7 +439,7 @@ def setup_reference_output_paths(args: argparse.Namespace) -> None:
     args.raw_ref_db = args.outdir / "raw_reference_db"
     args.ref_self_blast = args.blast_dir / "reference_self.blastn.tsv"
     args.ref_self_clean_prefix = args.results_dir / "reference_self_clean"
-    args.ref_self_clean_introns_fa = args.results_dir / "reference_self_clean.introns.fa"
+    args.ref_self_clean_introns_fa = args.results_dir / "reference_self_clean.ivs.fa"
     args.cleaned_ref_fa = args.outdir / "cleaned_reference.fa"
     args.cleaned_ref_tax = args.outdir / "cleaned_reference.tax.tsv"
     args.cleaned_ref_db = args.outdir / "cleaned_reference_db"
@@ -445,7 +455,7 @@ def init_reference_command(args: argparse.Namespace) -> int:
     if not args.ref_fasta.exists():
         raise FileNotFoundError(f"Reference FASTA not found: {args.ref_fasta}")
     if args.min_intron_len > args.max_intron_len:
-        raise ValueError("--min-intron-len must be <= --max-intron-len")
+        raise ValueError("--min-ivs-len must be <= --max-ivs-len")
     setup_reference_output_paths(args)
     ref_fa, taxonomy_tsv, db_prefix = preprocess_reference(args)
     if args.clean_ref_introns:
@@ -485,7 +495,7 @@ def submit_slurm_command(args: argparse.Namespace) -> int:
     if not manifest.exists():
         raise FileNotFoundError(f"Chunk manifest not found: {manifest}")
     if args.min_intron_len > args.max_intron_len:
-        raise ValueError("--min-intron-len must be <= --max-intron-len")
+        raise ValueError("--min-ivs-len must be <= --max-ivs-len")
     if not blast_db_prefix_exists(args.db):
         LOG.warning("No BLAST DB files found for prefix on this filesystem: %s", args.db)
     if not args.taxonomy and "--taxonomy" not in args.extra_run_args:

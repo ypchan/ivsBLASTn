@@ -59,11 +59,11 @@ class BatchWorkflowTests(unittest.TestCase):
             for chunk_name, query_id in [("query.000001", "q1"), ("query.000002", "q2")]:
                 results = tmp / "chunks" / chunk_name / "results"
                 results.mkdir(parents=True)
-                with gzip.open(results / f"{chunk_name}.intron_free.fa.gz", "wt", encoding="utf-8") as handle:
+                with gzip.open(results / f"{chunk_name}.ivs_free.fa.gz", "wt", encoding="utf-8") as handle:
                     handle.write(f">{query_id}\nAAAA\n")
 
             merge_chunk_outputs(tmp / "chunks", tmp / "final", label="all")
-            merged_path = tmp / "final" / "results" / "all.intron_free.fa.gz"
+            merged_path = tmp / "final" / "results" / "all.ivs_free.fa.gz"
 
             with gzip.open(merged_path, "rt", encoding="utf-8") as handle:
                 merged = handle.read()
@@ -99,6 +99,8 @@ class BatchWorkflowTests(unittest.TestCase):
 
             self.assertIn("#SBATCH --array=1-2%10", script)
             self.assertIn("ivsBLASTn run", script)
+            self.assertIn("--top-subjects 100", script)
+            self.assertIn("--blast-max-hsps 5", script)
             self.assertIn("--min-pident 80", script)
             self.assertIn("--max-ref-gap 12", script)
             self.assertIn("--min-output-confidence MEDIUM", script)

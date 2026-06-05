@@ -107,6 +107,7 @@ class AlgorithmStatusTests(unittest.TestCase):
         self.assertEqual([(r.intron_start, r.intron_end) for r in results], [(101, 150), (351, 400)])
         self.assertEqual([r.ivs_index for r in results], [1, 2])
         self.assertEqual([r.ivs_count for r in results], [2, 2])
+        self.assertEqual([r.intron_free_len for r in results], [500, 500])
         self.assertTrue(all(r.classification == "LOW_CONFIDENCE_16S_IVS" for r in results))
 
 

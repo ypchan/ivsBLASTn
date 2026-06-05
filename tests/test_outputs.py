@@ -6,7 +6,7 @@ import unittest
 
 from ivsblastn.algorithm import is_intron_result
 from ivsblastn.models import QueryResult
-from ivsblastn.outputs import print_summary, write_fasta_outputs, write_report, write_summary
+from ivsblastn.outputs import print_summary, write_bed_outputs, write_fasta_outputs, write_report, write_summary
 
 
 class OutputTests(unittest.TestCase):
@@ -168,6 +168,50 @@ class OutputTests(unittest.TestCase):
             self.assertIn("AAACTTGG", free_text)
             self.assertIn(">q1|ivs_1|4-5|len=2|confidence=MEDIUM", ivs_text)
             self.assertIn(">q1|ivs_2|9-10|len=2|confidence=MEDIUM", ivs_text)
+
+    def test_write_bed_outputs_reports_final_exon_segments_for_multiple_ivs(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            args = SimpleNamespace(
+                introns_bed=tmp / "q1.ivs.bed",
+                exons_bed=tmp / "q1.exons.bed",
+                min_output_confidence="MEDIUM",
+            )
+            results = [
+                QueryResult(
+                    query_id="q1",
+                    query_len=12,
+                    classification="MEDIUM_CONFIDENCE_16S_IVS",
+                    confidence="MEDIUM",
+                    ivs_index=1,
+                    ivs_count=2,
+                    intron_start=4,
+                    intron_end=5,
+                    intron_len=2,
+                ),
+                QueryResult(
+                    query_id="q1",
+                    query_len=12,
+                    classification="MEDIUM_CONFIDENCE_16S_IVS",
+                    confidence="MEDIUM",
+                    ivs_index=2,
+                    ivs_count=2,
+                    intron_start=9,
+                    intron_end=10,
+                    intron_len=2,
+                ),
+            ]
+
+            write_bed_outputs(args, results)
+
+            ivs_bed = args.introns_bed.read_text(encoding="utf-8")
+            exon_bed = args.exons_bed.read_text(encoding="utf-8")
+            self.assertEqual(ivs_bed.count("\n"), 2)
+            self.assertIn("q1\t3\t5\tq1|ivs_1|4-5|confidence=MEDIUM", ivs_bed)
+            self.assertIn("q1\t8\t10\tq1|ivs_2|9-10|confidence=MEDIUM", ivs_bed)
+            self.assertIn("q1\t0\t3\tq1|exon_1|1-3|ivs_removed=2|confidence=MEDIUM", exon_bed)
+            self.assertIn("q1\t5\t8\tq1|exon_2|6-8|ivs_removed=2|confidence=MEDIUM", exon_bed)
+            self.assertIn("q1\t10\t12\tq1|exon_3|11-12|ivs_removed=2|confidence=MEDIUM", exon_bed)
 
     def test_write_summary_includes_blast_diagnostic_columns(self) -> None:
         with TemporaryDirectory() as tmpdir:

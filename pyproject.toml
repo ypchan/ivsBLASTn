@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ivsBLASTn"
-version = "0.1.0"
+version = "0.1.1"
 description = "Detect intervening sequences in 16S/SSU rRNA sequences by BLASTN HSP geometry."
 readme = "README.md"
 requires-python = ">=3.8"

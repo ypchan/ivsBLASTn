@@ -190,11 +190,11 @@ class ReferenceSelectionTests(unittest.TestCase):
 
             self.assertEqual(args.blast_max_hsps, 20)
             self.assertEqual(args.min_output_confidence, "MEDIUM")
-            self.assertEqual(args.ref_self_clean_introns_fa, Path(tmpdir) / "prepared" / "results" / "reference_self_clean.introns.fa")
+            self.assertEqual(args.ref_self_clean_introns_fa, Path(tmpdir) / "prepared" / "results" / "reference_self_clean.ivs.fa")
 
     def test_write_reference_introns_fasta_outputs_removed_reference_ivs(self) -> None:
         with TemporaryDirectory() as tmpdir:
-            output = Path(tmpdir) / "reference_self_clean.introns.fa"
+            output = Path(tmpdir) / "reference_self_clean.ivs.fa"
             result = QueryResult(
                 query_id="ref1",
                 query_len=10,

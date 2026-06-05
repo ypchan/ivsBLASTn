@@ -5,7 +5,7 @@ import csv
 from collections import Counter, defaultdict
 from pathlib import Path
 from statistics import median
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 from rich.table import Table
 
@@ -199,16 +199,38 @@ def write_fasta_outputs(args: argparse.Namespace, results: List[QueryResult], se
 def write_bed_outputs(args: argparse.Namespace, results: List[QueryResult]) -> None:
     """Write BED files."""
 
+    passing_by_query: Dict[str, List[QueryResult]] = defaultdict(list)
+    for result in results:
+        if is_intron_result(result, args.min_output_confidence):
+            passing_by_query[result.query_id].append(result)
+
     with args.introns_bed.open("wt", encoding="utf-8", newline="") as intron_file, args.exons_bed.open("wt", encoding="utf-8", newline="") as exon_file:
         intron_writer = csv.writer(intron_file, delimiter=chr(9), lineterminator=chr(10))
         exon_writer = csv.writer(exon_file, delimiter=chr(9), lineterminator=chr(10))
-        for result in results:
-            if not is_intron_result(result, args.min_output_confidence):
-                continue
-            ivs_label = f"ivs_{result.ivs_index or 1}"
-            intron_writer.writerow([result.query_id, result.intron_start - 1, result.intron_end, f"{result.query_id}|{ivs_label}|{result.intron_start}-{result.intron_end}|confidence={result.confidence}", ".", "+"])
-            exon_writer.writerow([result.query_id, result.exon1_start - 1, result.exon1_end, f"{result.query_id}|{ivs_label}|exon1|{result.exon1_start}-{result.exon1_end}|confidence={result.confidence}", ".", "+"])
-            exon_writer.writerow([result.query_id, result.exon2_start - 1, result.exon2_end, f"{result.query_id}|{ivs_label}|exon2|{result.exon2_start}-{result.exon2_end}|confidence={result.confidence}", ".", "+"])
+        for query_id, query_results in passing_by_query.items():
+            sorted_ivs = sorted(query_results, key=lambda r: (r.intron_start, r.intron_end))
+            for result in sorted_ivs:
+                ivs_label = f"ivs_{result.ivs_index or 1}"
+                intron_writer.writerow([result.query_id, result.intron_start - 1, result.intron_end, f"{result.query_id}|{ivs_label}|{result.intron_start}-{result.intron_end}|confidence={result.confidence}", ".", "+"])
+
+            exon_intervals = retained_exon_intervals(sorted_ivs[0].query_len, [(r.intron_start, r.intron_end) for r in sorted_ivs])
+            confidence = max((result.confidence for result in sorted_ivs), key=confidence_rank)
+            for exon_index, (start, end) in enumerate(exon_intervals, start=1):
+                exon_writer.writerow([query_id, start - 1, end, f"{query_id}|exon_{exon_index}|{start}-{end}|ivs_removed={len(sorted_ivs)}|confidence={confidence}", ".", "+"])
+
+
+def retained_exon_intervals(query_len: int, ivs_intervals: List[Tuple[int, int]]) -> List[Tuple[int, int]]:
+    """Return 1-based closed intervals left after removing sorted IVS intervals."""
+
+    intervals: List[Tuple[int, int]] = []
+    cursor = 1
+    for start, end in sorted(ivs_intervals):
+        if cursor <= start - 1:
+            intervals.append((cursor, start - 1))
+        cursor = max(cursor, end + 1)
+    if cursor <= query_len:
+        intervals.append((cursor, query_len))
+    return intervals
 
 
 def write_report(path: Path, results: List[QueryResult], args: argparse.Namespace) -> None:

@@ -9,6 +9,11 @@ from .logging import LOG
 MERGE_SUFFIXES = [
     ".summary.tsv",
     ".supporting_hsps.tsv",
+    ".ivs_free.fa",
+    ".ivs_free.fa.gz",
+    ".ivs.fa",
+    ".ivs.fa.gz",
+    ".ivs.bed",
     ".intron_free.fa",
     ".intron_free.fa.gz",
     ".introns.fa",
