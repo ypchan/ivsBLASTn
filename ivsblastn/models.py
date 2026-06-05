@@ -67,9 +67,9 @@ class SupportPair:
     hsp2: HSP
     query_gap: int
     subject_gap: int
-    intron_start: int
-    intron_end: int
-    intron_len: int
+    ivs_start: int
+    ivs_end: int
+    ivs_len: int
     pair_score: float
     taxonomy: str
     taxon_at_rank: str
@@ -105,14 +105,14 @@ class QueryResult:
     best_blast_pident: float = 0.0
     best_blast_bitscore: float = 0.0
     best_blast_taxonomy: str = ""
-    intron_start: int = 0
-    intron_end: int = 0
-    intron_len: int = 0
+    ivs_start: int = 0
+    ivs_end: int = 0
+    ivs_len: int = 0
     exon1_start: int = 0
     exon1_end: int = 0
     exon2_start: int = 0
     exon2_end: int = 0
-    intron_free_len: int = 0
+    ivs_free_len: int = 0
     support_subjects: int = 0
     support_taxa: int = 0
     support_species: int = 0

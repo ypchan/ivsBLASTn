@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 import unittest
 
-from ivsblastn.algorithm import is_intron_result
+from ivsblastn.algorithm import is_ivs_result
 from ivsblastn.models import QueryResult
 from ivsblastn.outputs import print_summary, write_bed_outputs, write_fasta_outputs, write_report, write_summary
 
@@ -23,15 +23,15 @@ class OutputTests(unittest.TestCase):
                 algorithm="hsp-gap-support",
                 min_pident=75.0,
                 min_hsp_len=100,
-                min_intron_len=25,
-                max_intron_len=2000,
+                min_ivs_len=25,
+                max_ivs_len=2000,
                 max_ref_gap=30,
                 max_query_overlap=20,
                 breakpoint_window=30,
                 top_subjects=100,
                 ref_domains="Archaea,Bacteria",
                 ref_per_species=1,
-                clean_ref_introns=True,
+                clean_ref_ivs=True,
                 ref_clean_min_confidence="LOW",
                 ref_self_blast_max_target_seqs=100,
                 ref_self_blast_max_hsps=20,
@@ -54,15 +54,15 @@ class OutputTests(unittest.TestCase):
             self.assertIn("Candidate IVS events detected: `0`", text)
             self.assertIn("Candidate IVSs passing `LOW` output threshold: `0`", text)
 
-    def test_intron_result_threshold_controls_fasta_removal(self) -> None:
+    def test_ivs_result_threshold_controls_fasta_removal(self) -> None:
         low = QueryResult(
             query_id="q1",
             query_len=10,
             classification="LOW_CONFIDENCE_16S_IVS",
             confidence="LOW",
-            intron_start=4,
-            intron_end=6,
-            intron_len=3,
+            ivs_start=4,
+            ivs_end=6,
+            ivs_len=3,
             exon1_start=1,
             exon1_end=3,
             exon2_start=7,
@@ -73,25 +73,25 @@ class OutputTests(unittest.TestCase):
             query_len=10,
             classification="HIGH_CONFIDENCE_16S_IVS",
             confidence="HIGH",
-            intron_start=4,
-            intron_end=6,
-            intron_len=3,
+            ivs_start=4,
+            ivs_end=6,
+            ivs_len=3,
             exon1_start=1,
             exon1_end=3,
             exon2_start=7,
             exon2_end=10,
         )
 
-        self.assertTrue(is_intron_result(low, "LOW"))
-        self.assertFalse(is_intron_result(low, "MEDIUM"))
-        self.assertTrue(is_intron_result(high, "MEDIUM"))
+        self.assertTrue(is_ivs_result(low, "LOW"))
+        self.assertFalse(is_ivs_result(low, "MEDIUM"))
+        self.assertTrue(is_ivs_result(high, "MEDIUM"))
 
-    def test_write_fasta_outputs_removes_passing_introns(self) -> None:
+    def test_write_fasta_outputs_removes_passing_ivs(self) -> None:
         with TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
             args = SimpleNamespace(
-                intron_free_fa=tmp / "intron_free.fa",
-                introns_fa=tmp / "introns.fa",
+                ivs_free_fa=tmp / "ivs_free.fa",
+                ivs_fa=tmp / "ivs.fa",
                 min_output_confidence="LOW",
             )
             result = QueryResult(
@@ -101,9 +101,9 @@ class OutputTests(unittest.TestCase):
                 ivs_index=1,
                 ivs_count=1,
                 confidence="HIGH",
-                intron_start=4,
-                intron_end=6,
-                intron_len=3,
+                ivs_start=4,
+                ivs_end=6,
+                ivs_len=3,
                 exon1_start=1,
                 exon1_end=3,
                 exon2_start=7,
@@ -112,19 +112,19 @@ class OutputTests(unittest.TestCase):
 
             write_fasta_outputs(args, [result], {"q1": "AAACCCGGGG"})
 
-            free_text = args.intron_free_fa.read_text(encoding="utf-8")
-            intron_text = args.introns_fa.read_text(encoding="utf-8")
+            free_text = args.ivs_free_fa.read_text(encoding="utf-8")
+            ivs_text = args.ivs_fa.read_text(encoding="utf-8")
             self.assertIn("action=removed", free_text)
             self.assertIn("AAAGGGG", free_text)
-            self.assertIn(">q1|ivs_1|4-6|len=3|confidence=HIGH", intron_text)
-            self.assertIn("CCC", intron_text)
+            self.assertIn(">q1|ivs_1|4-6|len=3|confidence=HIGH", ivs_text)
+            self.assertIn("CCC", ivs_text)
 
     def test_write_fasta_outputs_removes_multiple_passing_ivs(self) -> None:
         with TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
             args = SimpleNamespace(
-                intron_free_fa=tmp / "ivs_free.fa",
-                introns_fa=tmp / "ivs.fa",
+                ivs_free_fa=tmp / "ivs_free.fa",
+                ivs_fa=tmp / "ivs.fa",
                 min_output_confidence="MEDIUM",
             )
             results = [
@@ -135,9 +135,9 @@ class OutputTests(unittest.TestCase):
                     confidence="MEDIUM",
                     ivs_index=1,
                     ivs_count=2,
-                    intron_start=4,
-                    intron_end=5,
-                    intron_len=2,
+                    ivs_start=4,
+                    ivs_end=5,
+                    ivs_len=2,
                     exon1_start=1,
                     exon1_end=3,
                     exon2_start=6,
@@ -150,9 +150,9 @@ class OutputTests(unittest.TestCase):
                     confidence="MEDIUM",
                     ivs_index=2,
                     ivs_count=2,
-                    intron_start=9,
-                    intron_end=10,
-                    intron_len=2,
+                    ivs_start=9,
+                    ivs_end=10,
+                    ivs_len=2,
                     exon1_start=1,
                     exon1_end=8,
                     exon2_start=11,
@@ -162,8 +162,8 @@ class OutputTests(unittest.TestCase):
 
             write_fasta_outputs(args, results, {"q1": "AAACCCTTGGGG"})
 
-            free_text = args.intron_free_fa.read_text(encoding="utf-8")
-            ivs_text = args.introns_fa.read_text(encoding="utf-8")
+            free_text = args.ivs_free_fa.read_text(encoding="utf-8")
+            ivs_text = args.ivs_fa.read_text(encoding="utf-8")
             self.assertIn("ivs=4-5,9-10", free_text)
             self.assertIn("AAACTTGG", free_text)
             self.assertIn(">q1|ivs_1|4-5|len=2|confidence=MEDIUM", ivs_text)
@@ -173,7 +173,7 @@ class OutputTests(unittest.TestCase):
         with TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
             args = SimpleNamespace(
-                introns_bed=tmp / "q1.ivs.bed",
+                ivs_bed=tmp / "q1.ivs.bed",
                 exons_bed=tmp / "q1.exons.bed",
                 min_output_confidence="MEDIUM",
             )
@@ -185,9 +185,9 @@ class OutputTests(unittest.TestCase):
                     confidence="MEDIUM",
                     ivs_index=1,
                     ivs_count=2,
-                    intron_start=4,
-                    intron_end=5,
-                    intron_len=2,
+                    ivs_start=4,
+                    ivs_end=5,
+                    ivs_len=2,
                 ),
                 QueryResult(
                     query_id="q1",
@@ -196,15 +196,15 @@ class OutputTests(unittest.TestCase):
                     confidence="MEDIUM",
                     ivs_index=2,
                     ivs_count=2,
-                    intron_start=9,
-                    intron_end=10,
-                    intron_len=2,
+                    ivs_start=9,
+                    ivs_end=10,
+                    ivs_len=2,
                 ),
             ]
 
             write_bed_outputs(args, results)
 
-            ivs_bed = args.introns_bed.read_text(encoding="utf-8")
+            ivs_bed = args.ivs_bed.read_text(encoding="utf-8")
             exon_bed = args.exons_bed.read_text(encoding="utf-8")
             self.assertEqual(ivs_bed.count("\n"), 2)
             self.assertIn("q1\t3\t5\tq1|ivs_1|4-5|confidence=MEDIUM", ivs_bed)
@@ -242,14 +242,13 @@ class OutputTests(unittest.TestCase):
             self.assertIn("best_blast_subject", text)
             self.assertIn("ivs_index", text)
             self.assertIn("ivs_start", text)
-            self.assertNotIn("intron_start", text)
 
     def test_print_summary_handles_blast_status_counts(self) -> None:
         args = SimpleNamespace(
             min_output_confidence="MEDIUM",
             summary_tsv="summary.tsv",
-            intron_free_fa="intron_free.fa",
-            introns_fa="introns.fa",
+            ivs_free_fa="ivs_free.fa",
+            ivs_fa="ivs.fa",
         )
         result = QueryResult(
             query_id="q1",

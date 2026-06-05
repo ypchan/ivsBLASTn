@@ -14,6 +14,8 @@ class CliDefaultTests(unittest.TestCase):
                 "query.fa",
                 "--db",
                 "reference_db",
+                "--taxonomy",
+                "reference.tax.tsv",
                 "--outdir",
                 "out",
             ]
@@ -21,7 +23,9 @@ class CliDefaultTests(unittest.TestCase):
 
         self.assertEqual(args.top_subjects, 100)
         self.assertEqual(args.blast_max_hsps, 5)
-        self.assertEqual(args.ref_unclear_per_genus, 5)
+        self.assertFalse(hasattr(args, "ref_unclear_per_genus"))
+        self.assertFalse(hasattr(args, "ref_fasta"))
+        self.assertFalse(hasattr(args, "clean_ref_ivs"))
         self.assertFalse(hasattr(args, "blast_max_target_seqs"))
 
     def test_legacy_run_arguments_are_mapped_to_run_subcommand(self) -> None:
@@ -42,9 +46,9 @@ class CliDefaultTests(unittest.TestCase):
         self.assertEqual(args.ref_per_species, 1)
         self.assertEqual(args.ref_unclear_per_genus, 5)
         self.assertEqual(args.ref_clean_min_confidence, "MEDIUM")
-        self.assertFalse(args.clean_ref_introns)
+        self.assertFalse(args.clean_ref_ivs)
 
-    def test_ivs_named_options_keep_legacy_destinations(self) -> None:
+    def test_run_uses_only_ivs_named_detection_options(self) -> None:
         args = build_parser().parse_args(
             [
                 "run",
@@ -52,9 +56,10 @@ class CliDefaultTests(unittest.TestCase):
                 "query.fa",
                 "--db",
                 "reference_db",
+                "--taxonomy",
+                "reference.tax.tsv",
                 "--outdir",
                 "out",
-                "--clean-ref-ivs",
                 "--min-ivs-len",
                 "30",
                 "--max-ivs-len",
@@ -62,9 +67,8 @@ class CliDefaultTests(unittest.TestCase):
             ]
         )
 
-        self.assertTrue(args.clean_ref_introns)
-        self.assertEqual(args.min_intron_len, 30)
-        self.assertEqual(args.max_intron_len, 1500)
+        self.assertEqual(args.min_ivs_len, 30)
+        self.assertEqual(args.max_ivs_len, 1500)
 
     def test_submit_slurm_forwards_detection_defaults(self) -> None:
         args = build_parser().parse_args(
@@ -74,6 +78,8 @@ class CliDefaultTests(unittest.TestCase):
                 "chunks",
                 "--db",
                 "reference_db",
+                "--taxonomy",
+                "reference.tax.tsv",
                 "--outdir",
                 "batch",
             ]

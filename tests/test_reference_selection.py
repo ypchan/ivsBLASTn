@@ -7,7 +7,7 @@ import unittest
 from ivsblastn.fasta import genus_key_from_taxonomy, read_fasta, species_key_from_taxonomy
 from ivsblastn.cli import init_reference_command, setup_reference_output_paths
 from ivsblastn.models import QueryResult
-from ivsblastn.reference import preprocess_reference, write_reference_introns_fasta
+from ivsblastn.reference import preprocess_reference, write_reference_ivs_fasta
 
 
 class ReferenceSelectionTests(unittest.TestCase):
@@ -131,9 +131,9 @@ class ReferenceSelectionTests(unittest.TestCase):
                 ref_domains="Archaea,Bacteria",
                 ref_per_species=1,
                 ref_unclear_per_genus=5,
-                clean_ref_introns=False,
-                min_intron_len=25,
-                max_intron_len=2000,
+                clean_ref_ivs=False,
+                min_ivs_len=25,
+                max_ivs_len=2000,
                 makeblastdb_bin="true",
             )
 
@@ -160,14 +160,14 @@ class ReferenceSelectionTests(unittest.TestCase):
             args = SimpleNamespace(
                 ref_fasta=ref_fasta,
                 outdir=outdir,
-                clean_ref_introns=True,
-                min_intron_len=25,
-                max_intron_len=2000,
+                clean_ref_ivs=True,
+                min_ivs_len=25,
+                max_ivs_len=2000,
                 ref_self_blast_max_hsps=20,
             )
 
             with patch("ivsblastn.cli.preprocess_reference", return_value=(raw_ref_fa, raw_ref_tax, raw_ref_db)), patch(
-                "ivsblastn.cli.clean_reference_introns",
+                "ivsblastn.cli.clean_reference_ivs",
                 return_value=(cleaned_ref_fa, cleaned_ref_tax, cleaned_ref_db),
             ), patch("ivsblastn.cli.CONSOLE.print"):
                 self.assertEqual(init_reference_command(args), 0)
@@ -190,9 +190,9 @@ class ReferenceSelectionTests(unittest.TestCase):
 
             self.assertEqual(args.blast_max_hsps, 20)
             self.assertEqual(args.min_output_confidence, "MEDIUM")
-            self.assertEqual(args.ref_self_clean_introns_fa, Path(tmpdir) / "prepared" / "results" / "reference_self_clean.ivs.fa")
+            self.assertEqual(args.ref_self_clean_ivs_fa, Path(tmpdir) / "prepared" / "results" / "reference_self_clean.ivs.fa")
 
-    def test_write_reference_introns_fasta_outputs_removed_reference_ivs(self) -> None:
+    def test_write_reference_ivs_fasta_outputs_removed_reference_ivs(self) -> None:
         with TemporaryDirectory() as tmpdir:
             output = Path(tmpdir) / "reference_self_clean.ivs.fa"
             result = QueryResult(
@@ -202,16 +202,16 @@ class ReferenceSelectionTests(unittest.TestCase):
                 confidence="HIGH",
                 ivs_index=1,
                 ivs_count=1,
-                intron_start=4,
-                intron_end=6,
-                intron_len=3,
+                ivs_start=4,
+                ivs_end=6,
+                ivs_len=3,
                 exon1_start=1,
                 exon1_end=3,
                 exon2_start=7,
                 exon2_end=10,
             )
 
-            written = write_reference_introns_fasta(output, {"ref1": "AAACCCGGGG"}, [result], "LOW")
+            written = write_reference_ivs_fasta(output, {"ref1": "AAACCCGGGG"}, [result], "LOW")
 
             text = output.read_text(encoding="utf-8")
             self.assertEqual(written, 1)

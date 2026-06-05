@@ -14,12 +14,7 @@ MERGE_SUFFIXES = [
     ".ivs.fa",
     ".ivs.fa.gz",
     ".ivs.bed",
-    ".intron_free.fa",
-    ".intron_free.fa.gz",
-    ".introns.fa",
-    ".introns.fa.gz",
     ".exons.bed",
-    ".introns.bed",
 ]
 
 

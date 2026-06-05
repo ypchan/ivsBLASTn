@@ -24,26 +24,26 @@ def subject_gap_by_query_order(left: HSP, right: HSP) -> Optional[int]:
     return None
 
 
-def hsp_pair_supports_intron(h1: HSP, h2: HSP, args: argparse.Namespace) -> Optional[Tuple[int, int, int, int, int]]:
+def hsp_pair_supports_ivs(h1: HSP, h2: HSP, args: argparse.Namespace) -> Optional[Tuple[int, int, int, int, int]]:
     """Return IVS geometry if two HSPs support an insertion-like gap."""
 
     left, right = sorted([h1, h2], key=lambda h: (h.qlo, h.qhi))
     query_gap = right.qlo - left.qhi - 1
     if query_gap < 0 and abs(query_gap) > args.max_query_overlap:
         return None
-    if query_gap < args.min_intron_len or query_gap > args.max_intron_len:
+    if query_gap < args.min_ivs_len or query_gap > args.max_ivs_len:
         return None
     subject_gap = subject_gap_by_query_order(left, right)
     if subject_gap is None:
         return None
     if abs(subject_gap) > args.max_ref_gap:
         return None
-    intron_start = left.qhi + 1
-    intron_end = right.qlo - 1
-    intron_len = intron_end - intron_start + 1
-    if intron_len < args.min_intron_len or intron_len > args.max_intron_len:
+    ivs_start = left.qhi + 1
+    ivs_end = right.qlo - 1
+    ivs_len = ivs_end - ivs_start + 1
+    if ivs_len < args.min_ivs_len or ivs_len > args.max_ivs_len:
         return None
-    return query_gap, subject_gap, intron_start, intron_end, intron_len
+    return query_gap, subject_gap, ivs_start, ivs_end, ivs_len
 
 
 def support_pairs_for_subject(query_id: str, subject_id: str, hsps: List[HSP], taxonomy: Dict[str, str], args: argparse.Namespace) -> List[SupportPair]:
@@ -57,10 +57,10 @@ def support_pairs_for_subject(query_id: str, subject_id: str, hsps: List[HSP], t
     hsps_sorted = sorted(hsps, key=lambda h: (-h.bitscore, h.qlo, h.qhi))
     for i in range(len(hsps_sorted)):
         for j in range(i + 1, len(hsps_sorted)):
-            support = hsp_pair_supports_intron(hsps_sorted[i], hsps_sorted[j], args)
+            support = hsp_pair_supports_ivs(hsps_sorted[i], hsps_sorted[j], args)
             if support is None:
                 continue
-            query_gap, subject_gap, intron_start, intron_end, intron_len = support
+            query_gap, subject_gap, ivs_start, ivs_end, ivs_len = support
             pair_score = hsps_sorted[i].bitscore + hsps_sorted[j].bitscore - 2.0 * abs(subject_gap)
             candidate = SupportPair(
                 query_id=query_id,
@@ -69,9 +69,9 @@ def support_pairs_for_subject(query_id: str, subject_id: str, hsps: List[HSP], t
                 hsp2=hsps_sorted[j],
                 query_gap=query_gap,
                 subject_gap=subject_gap,
-                intron_start=intron_start,
-                intron_end=intron_end,
-                intron_len=intron_len,
+                ivs_start=ivs_start,
+                ivs_end=ivs_end,
+                ivs_len=ivs_len,
                 pair_score=pair_score,
                 taxonomy=tax,
                 taxon_at_rank=taxon,
@@ -166,12 +166,12 @@ def cluster_support_pairs(pairs: List[SupportPair], breakpoint_window: int) -> L
     """Cluster support pairs by similar query IVS coordinates."""
 
     clusters: List[List[SupportPair]] = []
-    for pair in sorted(pairs, key=lambda p: (p.intron_start, p.intron_end, -p.pair_score)):
+    for pair in sorted(pairs, key=lambda p: (p.ivs_start, p.ivs_end, -p.pair_score)):
         assigned = False
         for cluster in clusters:
-            med_start = int(median([p.intron_start for p in cluster]))
-            med_end = int(median([p.intron_end for p in cluster]))
-            if abs(pair.intron_start - med_start) <= breakpoint_window and abs(pair.intron_end - med_end) <= breakpoint_window:
+            med_start = int(median([p.ivs_start for p in cluster]))
+            med_end = int(median([p.ivs_end for p in cluster]))
+            if abs(pair.ivs_start - med_start) <= breakpoint_window and abs(pair.ivs_end - med_end) <= breakpoint_window:
                 cluster.append(pair)
                 assigned = True
                 break
@@ -255,9 +255,9 @@ def cluster_to_result(
     """Convert one support-pair cluster into one IVS result row."""
 
     best_cluster = deduplicate_cluster_subjects(cluster)
-    intron_start = int(round(median([p.intron_start for p in best_cluster])))
-    intron_end = int(round(median([p.intron_end for p in best_cluster])))
-    intron_len = intron_end - intron_start + 1
+    ivs_start = int(round(median([p.ivs_start for p in best_cluster])))
+    ivs_end = int(round(median([p.ivs_end for p in best_cluster])))
+    ivs_len = ivs_end - ivs_start + 1
     support_subjects = len({p.subject_id for p in best_cluster})
     support_taxa = len({p.taxon_at_rank for p in best_cluster if p.taxon_at_rank != "NA"})
     support_species = unique_taxa_at_rank(best_cluster, "species")
@@ -279,10 +279,10 @@ def cluster_to_result(
     median_pident = float(median([(p.hsp1.pident + p.hsp2.pident) / 2.0 for p in best_cluster]))
     mean_bitscore = sum(p.hsp1.bitscore + p.hsp2.bitscore for p in best_cluster) / len(best_cluster)
     exon1_start = 1
-    exon1_end = intron_start - 1
-    exon2_start = intron_end + 1
+    exon1_end = ivs_start - 1
+    exon2_start = ivs_end + 1
     exon2_end = query_len
-    intron_free_len = max(0, exon1_end - exon1_start + 1) + max(0, exon2_end - exon2_start + 1)
+    ivs_free_len = max(0, exon1_end - exon1_start + 1) + max(0, exon2_end - exon2_start + 1)
     return QueryResult(
         query_id=query_id,
         query_len=query_len,
@@ -291,14 +291,14 @@ def cluster_to_result(
         ivs_index=ivs_index,
         ivs_count=ivs_count,
         **blast_result_fields("IVS_PATTERN_DETECTED", stats, top_subjects, taxonomy),
-        intron_start=intron_start,
-        intron_end=intron_end,
-        intron_len=intron_len,
+        ivs_start=ivs_start,
+        ivs_end=ivs_end,
+        ivs_len=ivs_len,
         exon1_start=exon1_start,
         exon1_end=exon1_end,
         exon2_start=exon2_start,
         exon2_end=exon2_end,
-        intron_free_len=intron_free_len,
+        ivs_free_len=ivs_free_len,
         support_subjects=support_subjects,
         support_taxa=support_taxa,
         support_species=support_species,
@@ -316,7 +316,7 @@ def cluster_to_result(
 def intervals_overlap(left: QueryResult, right: QueryResult) -> bool:
     """Return True when two IVS intervals overlap on the query."""
 
-    return left.intron_start <= right.intron_end and right.intron_start <= left.intron_end
+    return left.ivs_start <= right.ivs_end and right.ivs_start <= left.ivs_end
 
 
 def analyze_query_all(
@@ -359,14 +359,14 @@ def analyze_query_all(
             continue
         selected.append(candidate)
 
-    selected.sort(key=lambda r: (r.intron_start, r.intron_end))
+    selected.sort(key=lambda r: (r.ivs_start, r.ivs_end))
     ivs_count = len(selected)
-    ivs_free_len = max(0, query_len - sum(result.intron_len for result in selected))
+    ivs_free_len = max(0, query_len - sum(result.ivs_len for result in selected))
     results: List[QueryResult] = []
     for ivs_index, result in enumerate(selected, start=1):
         cluster = result.support_pairs or []
         final_result = cluster_to_result(query_id, query_len, cluster, stats, top_subjects, taxonomy, args, ivs_index, ivs_count)
-        final_result.intron_free_len = ivs_free_len
+        final_result.ivs_free_len = ivs_free_len
         results.append(final_result)
     return results
 
@@ -390,7 +390,7 @@ def confidence_rank(label: str) -> int:
     return {"NONE": 0, "LOW": 1, "MEDIUM": 2, "HIGH": 3}.get(label, 0)
 
 
-def is_intron_result(result: QueryResult, min_confidence: str) -> bool:
+def is_ivs_result(result: QueryResult, min_confidence: str) -> bool:
     """Return True if a result passes output confidence threshold."""
 
-    return bool(result.intron_start and result.intron_end) and confidence_rank(result.confidence) >= confidence_rank(min_confidence)
+    return bool(result.ivs_start and result.ivs_end) and confidence_rank(result.confidence) >= confidence_rank(min_confidence)

@@ -73,9 +73,12 @@ makeblastdb -version
 If BLAST+ is not on `PATH`, pass explicit paths:
 
 ```bash
-ivsBLASTn run ... \
+ivsBLASTn init-reference ... \
   --blastn-bin /path/to/blastn \
   --makeblastdb-bin /path/to/makeblastdb
+
+ivsBLASTn run ... \
+  --blastn-bin /path/to/blastn
 ```
 
 ## Commands
@@ -91,13 +94,13 @@ ivsBLASTn merge         Merge per-chunk outputs
 Old single-command usage is still accepted:
 
 ```bash
-ivsBLASTn --query query.fa --db ref_db --outdir out
+ivsBLASTn --query query.fa --db ref_db --taxonomy ref.tax.tsv --outdir out
 ```
 
 Internally this is treated as:
 
 ```bash
-ivsBLASTn run --query query.fa --db ref_db --outdir out
+ivsBLASTn run --query query.fa --db ref_db --taxonomy ref.tax.tsv --outdir out
 ```
 
 ## Reference Data
@@ -144,17 +147,7 @@ ivsBLASTn run \
   --threads 8
 ```
 
-With `--clean-ref-ivs`, `reference_self_clean.report.md` summarizes reference IVS candidates and `reference_self_clean.ivs.fa` contains the IVS sequences actually removed from `cleaned_reference.fa`. The legacy option name `--clean-ref-introns` is still accepted as an alias.
-
-You can still initialize and run in one command:
-
-```bash
-ivsBLASTn run \
-  --query query_16s.fa \
-  --ref-fasta SILVA_NR99.fa.gz \
-  --outdir ivs_run \
-  --threads 8
-```
+With `--clean-ref-ivs`, `reference_self_clean.report.md` summarizes reference IVS candidates and `reference_self_clean.ivs.fa` contains the IVS sequences actually removed from `cleaned_reference.fa`.
 
 Reference preprocessing rules:
 
@@ -185,17 +178,9 @@ These are not used as species-level representatives, but can be retained by the 
 --ref-unclear-per-genus 0
 ```
 
-When `--ref-fasta` is used directly in `ivsBLASTn run`, outputs under `outdir/reference/` include:
+### Run Against An Initialized Reference DB
 
-```text
-raw_reference.fa
-raw_reference.tax.tsv
-raw_reference_db.*
-```
-
-### Starting From An Existing BLAST DB
-
-Use this when you already have a curated reference DB:
+`ivsBLASTn run` does not initialize, select, clean, or build reference data. It requires the BLAST DB prefix and taxonomy TSV produced by `ivsBLASTn init-reference`:
 
 ```bash
 ivsBLASTn run \
@@ -206,7 +191,7 @@ ivsBLASTn run \
   --threads 8
 ```
 
-The taxonomy TSV should have two columns:
+The taxonomy TSV has two columns:
 
 ```text
 subject_id<TAB>taxonomy
@@ -214,11 +199,12 @@ subject_id<TAB>taxonomy
 
 ### Starting From An Existing BLAST Table
 
-Use this when BLASTN was run externally:
+Use this when BLASTN was run externally. The initialized DB path is still supplied so the run records and validates the reference source:
 
 ```bash
 ivsBLASTn run \
   --query query_16s.fa \
+  --db reference_db_prefix \
   --blast query_vs_reference.blastn.tsv \
   --taxonomy reference.tax.tsv \
   --outdir ivs_run
@@ -263,8 +249,6 @@ So the maximum reported HSP count per query is bounded by:
 For IVS detection in 16S rRNA genes, IVSs are expected to be sparse, so the default `--blast-max-hsps 5` keeps BLAST output smaller than the earlier conservative value of 20.
 
 The default thresholds are publication-oriented rather than discovery-only. The permissive `--min-pident 70` keeps distant 16S/SSU exon support available, while the geometry filters and MEDIUM/HIGH support requirements control sequence-changing calls. LOW-confidence candidates remain visible in `*.summary.tsv` and `*.supporting_hsps.tsv` for manual review, but sequence-changing outputs (`*.ivs_free.fa`, `*.ivs.fa`, and BED files) use `--min-output-confidence MEDIUM` by default. Reference self-cleaning also uses `--ref-clean-min-confidence MEDIUM` by default to avoid removing reference sequence from a single-subject signal. For stricter analyses, raise `--min-pident` explicitly, for example to 80 or 85.
-
-The legacy option names `--min-intron-len` and `--max-intron-len` are still accepted as aliases for `--min-ivs-len` and `--max-ivs-len`.
 
 For manuscripts, report the exact command line plus the confidence tier used for sequence editing. A conservative wording is that MEDIUM/HIGH IVSs were used for downstream corrected sequences, while LOW calls were retained as candidate signals requiring manual inspection.
 
